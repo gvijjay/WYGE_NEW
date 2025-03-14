@@ -50,7 +50,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # CORS middleware
+    'corsheaders.middleware.CorsMiddleware',  # Add this line
+    'django.middleware.common.CommonMiddleware',
 ]
 
 ROOT_URLCONF = 'agi_new.urls'
