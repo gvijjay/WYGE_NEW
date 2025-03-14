@@ -6,7 +6,7 @@ djangorestframework
 logging
 numpy
 plotly
-wyge==1.1.6
+wyge==1.1.7
 markdown
 sqlalchemy
 streamlit
@@ -17,3 +17,4 @@ langchain_openai
 qdrant_client
 dotenv
 psycopg2
+PyPDF2
