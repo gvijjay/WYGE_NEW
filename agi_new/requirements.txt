@@ -18,3 +18,4 @@ qdrant_client
 dotenv
 psycopg2
 PyPDF2
+langchain_community
