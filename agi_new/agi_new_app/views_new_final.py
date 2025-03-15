@@ -417,7 +417,7 @@ def run_openai_environment(request):
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Second Application: Synthetic_data_generator
-        if file or user_prompt and 'synthetic_data_generation' in agent[4]:
+        if 'synthetic_data_generation' in agent[4]:
             print("Starting...........................")
             if user_prompt and file:
                 print("Extend data condition")
