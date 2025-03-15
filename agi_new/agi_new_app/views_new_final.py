@@ -422,18 +422,21 @@ def run_openai_environment(request):
             if user_prompt and file:
                 print("Extend data condition")
                 result = handle_synthetic_data_from_excel(file,openai_api_key,user_prompt)
+                if "data" in result:
+                    response_data["csv_file"] = result["data"]
+                    return Response(response_data, status=status.HTTP_200_OK)
             elif file:
                 print("missing_data_condition")
                 result= handle_fill_missing_data(file,openai_api_key)
+                if "data" in result:
+                    response_data["csv_file"] = result["data"]
+                    return Response(response_data, status=status.HTTP_200_OK)
             else:
                 print("New data condition")
                 result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
-            # If the result contains data, return it as a CSV file
-            if "data" in result:
-                response_data["csv_file"] = result["data"]
-                return Response(response_data, status=status.HTTP_200_OK)
-            else:
-                return Response({"error": "No data generated."}, status=status.HTTP_400_BAD_REQUEST)
+                if "data" in result:
+                    response_data["csv_file"] = result["data"]
+                    return Response(response_data, status=status.HTTP_200_OK)
 
         # 3rd application:ATS Tracker
         if file and user_prompt and 'ats_tracker' in agent[4]:
