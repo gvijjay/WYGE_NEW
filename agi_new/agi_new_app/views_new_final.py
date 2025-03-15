@@ -418,6 +418,7 @@ def run_openai_environment(request):
 
         # Second Application: Synthetic_data_generator
         if 'synthetic_data_generation' in agent[4]:
+            print("Starting...........................")
             if user_prompt and file:
                 print("Extend data condition")
                 result = handle_synthetic_data_from_excel(file,openai_api_key,user_prompt)
@@ -439,7 +440,7 @@ def run_openai_environment(request):
             result = analyze_resume(user_prompt, file,openai_api_key)
             print("result is",result)
             # Validate response format
-            if "data" in result:
+            if "answer" in result:
                 return Response(result, status=status.HTTP_200_OK)
 
         # 4th application : Chat to doc within specific page numbers and querying
@@ -457,8 +458,8 @@ def run_openai_environment(request):
             print("Destination:",destination)
             print("Days",days)
             result=generate_travel_plan(destination,days,openai_api_key)
-            if "travel_plan" in result:
-                response_data["travel_plan"] = result["travel_plan"]
+            if "answer" in result:
+                response_data["answer"] = result["answer"]
                 return Response(response_data, status=status.HTTP_200_OK)
 
         #6th Application:Medical Diagnosis Agent
@@ -899,7 +900,7 @@ def analyze_resume(job_description, resume_file,api_key):
         result = analyzer.analyze_resume(resume_text, job_description)
 
         return {
-            "data": result
+            "answer": result
         }
     except Exception as e:
         return {"error": str(e)}
@@ -968,7 +969,7 @@ def generate_travel_plan(destination, days,openai_api_key):
         prompt = f"I need a travel plan to {destination} for {days} days"
         travel_plan = agent.generate_travel_plan(prompt)
 
-        return {"travel_plan": travel_plan}
+        return {"answer": travel_plan}
 
     except Exception as e:
         return {"error": f"Error occurred: {str(e)}"}
