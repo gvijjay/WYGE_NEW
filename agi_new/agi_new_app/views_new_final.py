@@ -450,8 +450,10 @@ def run_openai_environment(request):
                 return Response(response_data, status=status.HTTP_200_OK)
 
         # 5th application: Travel planner agent
+        from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
         if user_prompt and 'travel_planner' in agent[4]:
-            destination,days=extract_travel_details(user_prompt)
+            travel_planner_agent=TravelPlannerAgent(openai_api_key)
+            destination,days= travel_planner_agent.parse_user_input(user_prompt)
             print("Destination:",destination)
             print("Days",days)
             result=generate_travel_plan(destination,days,openai_api_key)
@@ -868,10 +870,12 @@ def handle_fill_missing_data(file, openai_api_key):
                 original_df.to_excel(temp_file_name, index=False)
             elif file_extension == ".csv":
                 original_df.to_csv(temp_file_name, index=False)
+        print(temp_file_name)
         print("Before the function enntering")
         filled_df = fill_missing_data_in_chunk(openai_api_key, temp_file_name)
-        print(filled_df)
+        print("Filled_data",filled_df)
         combined_csv = filled_df.to_csv(index=False)
+        print("combined_data",combined_csv)
 
         return {"data": combined_csv}
     except Exception as e:
@@ -944,6 +948,11 @@ def generate_travel_plan(destination, days,openai_api_key):
     try:
         if not destination:
             return {"error": "Missing destination"}
+        if not days:
+            return {"error":"Days required"}
+        print("In function destination",destination)
+        print("In function_days",days)
+
 
         # Get API keys with fallback values
         # weather_api_key =weather_api_key  # get_api_key("WEATHER_API_KEY", "f701a9b1299fa3bbb07471570c730090")
