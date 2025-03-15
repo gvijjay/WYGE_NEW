@@ -824,29 +824,34 @@ def extract_columns_from_prompt(user_prompt):
     return list(dict.fromkeys(formatted_columns))  # Remove duplicates
 
 
-# 2.Extend data Generation
-def handle_synthetic_data_from_excel(file, openai_api_key,user_prompt):
+def ensure_upload_folder():
+    upload_folder = "uploads"
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
+    return upload_folder
+
+#Extended data
+def handle_synthetic_data_from_excel(file, openai_api_key, user_prompt):
     try:
         file_extension = os.path.splitext(file.name)[1].lower()
+        upload_folder = ensure_upload_folder()
+        file_path = os.path.join(upload_folder, file.name)
+
         if file_extension == ".xlsx":
             original_df = pd.read_excel(file)
-            print(original_df.head(5))
         elif file_extension == ".csv":
             original_df = pd.read_csv(file)
-            print(original_df.head(5))
         else:
             return JsonResponse({"error": "Unsupported file format. Please upload an Excel or CSV file."}, status=400)
 
-        with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
-            temp_file_name = temp_file.name
-            if file_extension == ".xlsx":
-                original_df.to_excel(temp_file_name, index=False)
-            elif file_extension == ".csv":
-                original_df.to_csv(temp_file_name, index=False)
-        print(user_prompt)
-        num_rows =extract_num_rows_from_prompt(user_prompt)
-        print(num_rows)
-        generated_df = generate_synthetic_data(openai_api_key, temp_file_name, num_rows)
+        # Save file to uploads folder
+        if file_extension == ".xlsx":
+            original_df.to_excel(file_path, index=False)
+        elif file_extension == ".csv":
+            original_df.to_csv(file_path, index=False)
+
+        num_rows = extract_num_rows_from_prompt(user_prompt)
+        generated_df = generate_synthetic_data(openai_api_key, file_path, num_rows)
 
         combined_df = pd.concat([original_df, generated_df], ignore_index=True)
         combined_csv = combined_df.to_csv(index=False)
@@ -855,31 +860,29 @@ def handle_synthetic_data_from_excel(file, openai_api_key,user_prompt):
     except Exception as e:
         return {"error": str(e)}
 
-#3 Missing Data filling in synthetic data generation
+
+#Missing Data
 def handle_fill_missing_data(file, openai_api_key):
     try:
         file_extension = os.path.splitext(file.name)[1].lower()
+        upload_folder = ensure_upload_folder()
+        file_path = os.path.join(upload_folder, file.name)
+
         if file_extension == ".xlsx":
             original_df = pd.read_excel(file)
-            print(original_df.head(5))
         elif file_extension == ".csv":
             original_df = pd.read_csv(file)
-            print(original_df.head(5))
         else:
             return JsonResponse({"error": "Unsupported file format. Please upload an Excel or CSV file."}, status=400)
 
-        with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
-            temp_file_name = temp_file.name
-            if file_extension == ".xlsx":
-                original_df.to_excel(temp_file_name, index=False)
-            elif file_extension == ".csv":
-                original_df.to_csv(temp_file_name, index=False)
-        print(temp_file_name)
-        print("Before the function enntering")
-        filled_df = fill_missing_data_in_chunk(openai_api_key, temp_file_name)
-        print("Filled_data",filled_df)
+        # Save file to uploads folder
+        if file_extension == ".xlsx":
+            original_df.to_excel(file_path, index=False)
+        elif file_extension == ".csv":
+            original_df.to_csv(file_path, index=False)
+
+        filled_df = fill_missing_data_in_chunk(openai_api_key, file_path)
         combined_csv = filled_df.to_csv(index=False)
-        print("combined_data",combined_csv)
 
         return {"data": combined_csv}
     except Exception as e:
