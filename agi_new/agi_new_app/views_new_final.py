@@ -355,6 +355,32 @@ import sys
 import numpy as np
 from plotly.graph_objs import Figure
 
+#For travel planner agent
+def extract_travel_details(prompt):
+    """
+    Extracts destination and number of days from a user's travel request prompt with improved accuracy.
+    """
+    try:
+        # Normalize and clean input
+        prompt = prompt.strip()
+
+        # Improved regex patterns
+        days_match = re.search(r'\bfor (\d+) (?:days|nights)\b', prompt, re.IGNORECASE)
+        destination_match = re.search(r'\bto ([A-Za-z ,]+)\b', prompt, re.IGNORECASE)
+
+        days = int(days_match.group(1)) if days_match else None
+        destination = destination_match.group(1).strip() if destination_match else None
+
+        # Further refine destination extraction
+        if destination:
+            destination = destination.split(',')[0].strip()  # Remove extra details after a comma
+
+        if not destination or not days:
+            return {"error": "Could not extract destination or number of days from prompt."}
+
+        return destination,days
+    except Exception as e:
+        return {"error": f"Error processing prompt: {str(e)}"}
 
 @api_view(['POST'])
 def run_openai_environment(request):
@@ -362,7 +388,8 @@ def run_openai_environment(request):
         agent_id = request.data.get('agent_id')
         user_prompt = request.data.get('prompt', '')
         file = request.FILES.get('file')
-        page_range = request.data.get('prompt', '')
+        user_prompt1 = request.data.get('prompt', '')
+
 
         # Retrieve agent details
         agent = db.read_agent(agent_id)
@@ -389,45 +416,83 @@ def run_openai_environment(request):
             else:
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # # Second Application: Synthetic_data_generator
-        # if 'synthetic_data_generation' in agent[4]:
-        #     if user_prompt and file:
-        #         print("Extend data condition")
-        #         result = handle_synthetic_data_generation(file, user_prompt, openai_api_key)
-        #     else:
-        #         print("New data condition")
-        #         result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
-        #
-        #     # If the result contains data, return it as a CSV file
-        #     if "data" in result:
-        #         response_data["csv_file"] = result["data"]
-        #         return Response(response_data, status=status.HTTP_200_OK)
-        #     else:
-        #         return Response({"error": "No data generated."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # 3rd application:ATS Tracker
-        if file and user_prompt and 'ats_tracker' in agent[4]:
-            result = analyze_resume(user_prompt, file)
-            # Validate response format
+        # Second Application: Synthetic_data_generator
+        if 'synthetic_data_generation' in agent[4]:
+            if user_prompt and file:
+                print("Extend data condition")
+                result = handle_synthetic_data_from_excel(file,openai_api_key,user_prompt)
+            elif file:
+                print("missing_data_condition")
+                result= handle_fill_missing_data(file,openai_api_key)
+            else:
+                print("New data condition")
+                result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
+            # If the result contains data, return it as a CSV file
             if "data" in result:
-                return Response({
-                    "status": "success",
-                    "JD Match": result.get("JD Match"),
-                    "Missing Keywords": result.get("MissingKeywords", []),
-                    "Profile Summary": result.get("Profile Summary", ""),
-                    "Suggestions": result.get("Suggestions", [])
-                }, status=status.HTTP_200_OK)
+                response_data["csv_file"] = result["data"]
+                return Response(response_data, status=status.HTTP_200_OK)
             else:
                 return Response({"error": "No data generated."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # 3rd application:ATS Tracker
+        if file and user_prompt and 'ats_tracker' in agent[4]:
+            result = analyze_resume(user_prompt, file,openai_api_key)
+            print("result is",result)
+            # Validate response format
+            if "data" in result:
+                return Response(result, status=status.HTTP_200_OK)
+
         # 4th application : Chat to doc within specific page numbers and querying
         if file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
-            result = document_question_answering(openai_api_key, file, page_range, user_prompt)
+            result = document_question_answering(openai_api_key, file, user_prompt)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(response_data, status=status.HTTP_200_OK)
 
         # 5th application: Travel planner agent
+        if user_prompt and 'travel_planner' in agent[4]:
+            destination,days=extract_travel_details(user_prompt)
+            print("Destination:",destination)
+            print("Days",days)
+            result=generate_travel_plan(destination,days,openai_api_key)
+            if "travel_plan" in result:
+                response_data["travel_plan"] = result["travel_plan"]
+                return Response(response_data, status=status.HTTP_200_OK)
+
+        #6th Application:Medical Diagnosis Agent
+        if file and 'medical_diagnosis' in agent[4]:
+            result=run_medical_diagnosis(openai_api_key,file.read().decode("utf-8"))
+            print(result)
+            if "diagnosis" in result:
+                return Response(result,status=status.HTTP_200_OK)
+
+        #7th Application:Education Agent
+        if user_prompt and 'edu_gpt' in agent[4]:
+            result1= start_learning(request,user_prompt,openai_api_key)
+            if result1 in request.session:
+                result= chat_with_agent(request,user_prompt1)
+                if "assistant_response" in result:
+                    response_data["user_message"]=result["user_message"]
+                    response_data["assistant_response"]=result["assistant_response"]
+                    return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                return Response({"error"},status=status.HTTP_400_BAD_REQUEST)
+
+        #8th Application:medical Image processing
+        if file and 'image_processing' in agent[4]:
+            result=medical_image_analysis(openai_api_key,file)
+            if "result" in result:
+                response_data["result"] = result["result"]
+                response_data["simplified_explanation"] = result["simplified_explanation"]
+                return Response(response_data, status=status.HTTP_200_OK)
+
+        #9th Application:
+        if file and user_prompt and 'image_answering' in agent[4]:
+            result=visual_question_answering(openai_api_key,file,user_prompt)
+            if "answer" in result:
+                response_data["answer"] = result["answer"]
+                return Response(response_data, status=status.HTTP_200_OK)
+
 
         else:
             return Response({"error": "No valid tool found for the given input."}, status=status.HTTP_400_BAD_REQUEST)
@@ -687,127 +752,141 @@ def execute_py_code(code, df):
     return str(output)
 
 
-# ## 2nd Application(Synthetic-data-generator) ---Create and extend data
-# import pandas as pd
-# import tempfile
-# import re
-# from .generator import generate_synthetic_data, generate_data_from_text
-#
-#
-# # 1.New data generation
-# def handle_synthetic_data_for_new_data(user_prompt, openai_api_key):
-#     try:
-#         # Extract number of rows from the prompt
-#         num_rows = extract_num_rows_from_prompt(user_prompt)
-#         print("number of rows is..................")
-#         print(num_rows)
-#         if num_rows is None:
-#             return JsonResponse({"error": "Number of rows or records not found in the prompt."}, status=400)
-#
-#         # Extract column names from the prompt
-#         column_names = extract_columns_from_prompt(user_prompt)
-#         print(column_names)
-#         if not column_names:
-#             return JsonResponse({"error": "No field names found in the prompt."}, status=400)
-#
-#         # Generate synthetic data using the column names and the number of rows
-#         generated_df = generate_data_from_text(openai_api_key, user_prompt, column_names, num_rows=num_rows)
-#
-#         # Convert the generated DataFrame to CSV format
-#         combined_csv = generated_df.to_csv(index=False)
-#
-#         return {
-#             "data": combined_csv
-#         }
-#
-#     except Exception as e:
-#         return {"error": str(e)}
-#
-#
-# def extract_num_rows_from_prompt(user_prompt):
-#     match = re.search(r'(\d+)\s+(rows|records)', user_prompt, re.IGNORECASE)
-#     if match:
-#         return int(match.group(1))
-#     return None
-#
-#
-# def extract_columns_from_prompt(user_prompt):
-#     # Look for all possible field identifier formats followed by the column names
-#     match = re.search(r'(field names|column names|fields|columns|field_names|column_names):\s*([a-zA-Z0-9_,\s\.]+)',
-#                       user_prompt, re.IGNORECASE)
-#
-#     if match:
-#         # Extract the part containing column names
-#         raw_columns = match.group(2).split(',')
-#     else:
-#         return []
-#
-#     # Format each column name (remove spaces, convert to snake_case, lowercase)
-#     formatted_columns = [
-#         re.sub(r'[^a-zA-Z0-9]', '_', col.strip()).lower()
-#         for col in raw_columns
-#     ]
-#
-#     # Remove empty column names and ensure no duplicates
-#     formatted_columns = list(filter(bool, formatted_columns))
-#     return list(dict.fromkeys(formatted_columns))  # Remove duplicates
-#
-#
-# # 2.Extend data Generation
-# def handle_synthetic_data_generation(file, user_prompt, openai_api_key):
-#     try:
-#         # Determine file type and read into a DataFrame
-#         file_extension = os.path.splitext(file.name)[1].lower()
-#         print(file_extension)
-#         if file_extension == ".xlsx":
-#             original_df = pd.read_excel(file)
-#         elif file_extension == ".csv":
-#             original_df = pd.read_csv(file)
-#             print(original_df.head(5))
-#         else:
-#             return {"error": "Unsupported file format. Please upload an Excel or CSV file."}
-#
-#         # Create a temporary file for the data
-#         with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
-#             temp_file_name = temp_file.name
-#             # Save the truncated or original data to a temporary location
-#             if file_extension == ".xlsx":
-#                 original_df.to_excel(temp_file_name, index=False)
-#             elif file_extension == ".csv":
-#                 original_df.to_csv(temp_file_name, index=False)
-#
-#         # Extract the number of rows from the prompt
-#         num_rows = extract_num_rows_from_prompt(user_prompt)
-#         print(num_rows)
-#         if num_rows is None:
-#             return {"error": "Number of rows not found in the prompt"}
-#
-#         # Generate synthetic data using the temporary file path
-#         generated_df = generate_synthetic_data(openai_api_key, temp_file_name, num_rows)
-#
-#         # Combine the original and synthetic data
-#         combined_df = pd.concat([original_df, generated_df], ignore_index=True)
-#
-#         # Convert to CSV for download
-#         combined_csv = combined_df.to_csv(index=False)
-#
-#         return {
-#             "data": combined_csv
-#         }
-#
-#     except Exception as e:
-#         return {"error": str(e)}
+## 2nd Application(Synthetic-data-generator) ---Create and extend data
+import pandas as pd
+import tempfile
+import re
+from wyge.prebuilt_agents.synthetic_data_generator import generate_synthetic_data, generate_data_from_text, fill_missing_data_in_chunk
+
+
+# 1.New data generation
+def handle_synthetic_data_for_new_data(user_prompt, openai_api_key):
+    try:
+        # Extract number of rows from the prompt
+        num_rows = extract_num_rows_from_prompt(user_prompt)
+        print("number of rows is..................")
+        print(num_rows)
+        if num_rows is None:
+            return JsonResponse({"error": "Number of rows or records not found in the prompt."}, status=400)
+
+        # Extract column names from the prompt
+        column_names = extract_columns_from_prompt(user_prompt)
+        print(column_names)
+        if not column_names:
+            return JsonResponse({"error": "No field names found in the prompt."}, status=400)
+
+        # Generate synthetic data using the column names and the number of rows
+        generated_df = generate_data_from_text(openai_api_key, user_prompt, column_names, num_rows=num_rows)
+
+        # Convert the generated DataFrame to CSV format
+        combined_csv = generated_df.to_csv(index=False)
+
+        return {
+            "data": combined_csv
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def extract_num_rows_from_prompt(user_prompt):
+    match = re.search(r'(\d+)\s+(rows|records)', user_prompt, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def extract_columns_from_prompt(user_prompt):
+    # Look for all possible field identifier formats followed by the column names
+    match = re.search(r'(field names|column names|fields|columns|field_names|column_names):\s*([a-zA-Z0-9_,\s\.]+)',
+                      user_prompt, re.IGNORECASE)
+
+    if match:
+        # Extract the part containing column names
+        raw_columns = match.group(2).split(',')
+    else:
+        return []
+
+    # Format each column name (remove spaces, convert to snake_case, lowercase)
+    formatted_columns = [
+        re.sub(r'[^a-zA-Z0-9]', '_', col.strip()).lower()
+        for col in raw_columns
+    ]
+
+    # Remove empty column names and ensure no duplicates
+    formatted_columns = list(filter(bool, formatted_columns))
+    return list(dict.fromkeys(formatted_columns))  # Remove duplicates
+
+
+# 2.Extend data Generation
+def handle_synthetic_data_from_excel(file, openai_api_key,user_prompt):
+    try:
+        file_extension = os.path.splitext(file.name)[1].lower()
+        if file_extension == ".xlsx":
+            original_df = pd.read_excel(file)
+            print(original_df.head(5))
+        elif file_extension == ".csv":
+            original_df = pd.read_csv(file)
+            print(original_df.head(5))
+        else:
+            return JsonResponse({"error": "Unsupported file format. Please upload an Excel or CSV file."}, status=400)
+
+        with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
+            temp_file_name = temp_file.name
+            if file_extension == ".xlsx":
+                original_df.to_excel(temp_file_name, index=False)
+            elif file_extension == ".csv":
+                original_df.to_csv(temp_file_name, index=False)
+        print(user_prompt)
+        num_rows =extract_num_rows_from_prompt(user_prompt)
+        print(num_rows)
+        generated_df = generate_synthetic_data(openai_api_key, temp_file_name, num_rows)
+
+        combined_df = pd.concat([original_df, generated_df], ignore_index=True)
+        combined_csv = combined_df.to_csv(index=False)
+
+        return {"data": combined_csv}
+    except Exception as e:
+        return {"error": str(e)}
+
+#3 Missing Data filling in synthetic data generation
+def handle_fill_missing_data(file, openai_api_key):
+    try:
+        file_extension = os.path.splitext(file.name)[1].lower()
+        if file_extension == ".xlsx":
+            original_df = pd.read_excel(file)
+            print(original_df.head(5))
+        elif file_extension == ".csv":
+            original_df = pd.read_csv(file)
+            print(original_df.head(5))
+        else:
+            return JsonResponse({"error": "Unsupported file format. Please upload an Excel or CSV file."}, status=400)
+
+        with tempfile.NamedTemporaryFile(suffix=file_extension, delete=False) as temp_file:
+            temp_file_name = temp_file.name
+            if file_extension == ".xlsx":
+                original_df.to_excel(temp_file_name, index=False)
+            elif file_extension == ".csv":
+                original_df.to_csv(temp_file_name, index=False)
+        print("Before the function enntering")
+        filled_df = fill_missing_data_in_chunk(openai_api_key, temp_file_name)
+        print(filled_df)
+        combined_csv = filled_df.to_csv(index=False)
+
+        return {"data": combined_csv}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # 3rd application-ATS Tracker##########
 from wyge.prebuilt_agents.ats import ResumeAnalyzer
-def analyze_resume(job_description, resume_file):
+def analyze_resume(job_description, resume_file,api_key):
     try:
         if not job_description or not resume_file:
             return {"error": "Missing job description or resume file"}
 
         # Initialize the Resume Analyzer
-        analyzer = ResumeAnalyzer()
+        analyzer = ResumeAnalyzer(api_key)
 
         # Extract text from the uploaded resume
         resume_text = analyzer.extract_text_from_pdf(resume_file)
@@ -825,7 +904,7 @@ def analyze_resume(job_description, resume_file):
 # Application 4: Chat to doc (rag) with page extraction from start to end
 from wyge.prebuilt_agents.rag import RAGApplication
 import tempfile
-def document_question_answering(api_key, uploaded_file, page_range, query):
+def document_question_answering(api_key, uploaded_file, query):
     try:
         if not api_key or not uploaded_file:
             return {"error": "Missing API key or document file"}
@@ -836,6 +915,7 @@ def document_question_answering(api_key, uploaded_file, page_range, query):
             file_path = tmp_file.name
 
         # Parse page range
+        page_range="0-25"
         parsed_page_range = None
         if page_range:
             try:
@@ -860,20 +940,18 @@ def document_question_answering(api_key, uploaded_file, page_range, query):
 
 # 5th application : Travel planner agent
 from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
-def generate_travel_plan(destination, days, weather_api_key, geolocation_api_key, openai_api_key):
+def generate_travel_plan(destination, days,openai_api_key):
     try:
         if not destination:
             return {"error": "Missing destination"}
 
         # Get API keys with fallback values
-        weather_api_key =weather_api_key  # get_api_key("WEATHER_API_KEY", "f701a9b1299fa3bbb07471570c730090")
-        geolocation_api_key = geolocation_api_key  #get_api_key("GEOCODING_API_KEY", "2f85379af3084ad1a9fc724dfa71b041")
+        # weather_api_key =weather_api_key  # get_api_key("WEATHER_API_KEY", "f701a9b1299fa3bbb07471570c730090")
+        # geolocation_api_key = geolocation_api_key  #get_api_key("GEOCODING_API_KEY", "2f85379af3084ad1a9fc724dfa71b041")
         openai_api_key =openai_api_key
 
         # Initialize travel planner agent
         agent = TravelPlannerAgent(
-            weather_api_key=weather_api_key,
-            geolocation_api_key=geolocation_api_key,
             openai_api_key=openai_api_key
         )
 
@@ -885,6 +963,145 @@ def generate_travel_plan(destination, days, weather_api_key, geolocation_api_key
 
     except Exception as e:
         return {"error": f"Error occurred: {str(e)}"}
+
+
+
+## 6th application:Medical diagnosis agent
+from wyge.prebuilt_agents.medical_diagnosis import Cardiologist, Psychologist, Pulmonologist
+def run_medical_diagnosis(api_key, medical_report):
+    try:
+        if not api_key:
+            return {"error": "API key is required."}
+
+        if not medical_report:
+            return {"error": "Medical report is required."}
+
+        specialists = {
+            "Cardiologist": Cardiologist(medical_report, api_key),
+            "Psychologist": Psychologist(medical_report, api_key),
+            "Pulmonologist": Pulmonologist(medical_report, api_key)
+        }
+
+        diagnoses = {}
+        report_content = "Medical Diagnosis Report\n===========================\n"
+
+        for specialist, agent in specialists.items():
+            diagnosis = agent.run()
+            diagnoses[specialist] = diagnosis
+            report_content += f"Specialist: {specialist}\nDiagnosis:\n{diagnosis}\n\n"
+
+        return {
+            "diagnosis": diagnoses,
+            "report": report_content
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+## 7th application: Education Agent
+from langchain.chat_models import ChatOpenAI
+from wyge.prebuilt_agents.teaching_agent import teaching_agent_fun
+from wyge.prebuilt_agents.generating_syllabus import generate_syllabus
+
+# Initialize OpenAI model
+def start_learning(request,topic,api_key):
+    try:
+        if not topic:
+            return JsonResponse({"error": "Topic is required."}, status=400)
+
+        llm = ChatOpenAI(temperature=0.7,api_key=api_key)
+
+        syllabus = generate_syllabus(llm, topic, "Focus on providing a clear learning path.")
+        teaching_agent = teaching_agent_fun(llm)
+        teaching_agent["seed"](syllabus, topic)
+
+        request.session["teaching_agent"] = teaching_agent
+        request.session["current_topic"] = topic
+        request.session["messages"] = []
+        request.session.modified = True
+
+        return {"topic": topic, "syllabus": syllabus}
+    except Exception as e:
+        return {"error": str(e)}
+
+def chat_with_agent(request,user_input):
+    try:
+        if "teaching_agent" not in request.session:
+            return JsonResponse({"error": "Start a topic first."}, status=400)
+
+        if not user_input:
+            return JsonResponse({"error": "Message cannot be empty."}, status=400)
+
+        teaching_agent = request.session["teaching_agent"]
+        teaching_agent["add_user_message"](user_input)
+        response = teaching_agent["generate_response"]().content
+
+        messages = teaching_agent["conversation_history"]()
+        request.session["messages"] = messages
+        request.session.modified = True
+
+        return {"user_message": user_input, "assistant_response": response}
+    except Exception as e:
+        return {"error": str(e)}
+
+#8th application:medical image proccessing agent
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from wyge.prebuilt_agents.medical_image_processing import MedicalImageAnalyzer
+import os
+
+def medical_image_analysis(api_key,uploaded_file):
+    # Ensure the file is in an allowed format
+    allowed_extensions = {".jpg", ".jpeg", ".png"}
+    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+
+    if file_extension not in allowed_extensions:
+        return {"error": "Invalid file format. Please upload a JPG, JPEG, or PNG file."}
+
+    # Save file temporarily
+    file_path = default_storage.save(
+        "temp/" + uploaded_file.name, ContentFile(uploaded_file.read())
+    )
+    full_path = os.path.join(default_storage.location, file_path)
+    print(full_path)
+
+    # Analyze the image
+    analyzer = MedicalImageAnalyzer(api_key=api_key)
+    result = analyzer.analyze_image(full_path)
+    simplified_explanation = analyzer.simplify_explanation(result)
+
+    # Cleanup temporary file
+    default_storage.delete(file_path)
+
+    return {"result": result, "simplified_explanation": simplified_explanation}
+
+#9th Application:Image answering application
+from wyge.prebuilt_agents.vqa import VisualQA
+import os
+def visual_question_answering(api_key, uploaded_file, question):
+    # Ensure the file is in an allowed format
+    allowed_extensions = {".jpg", ".jpeg", ".png"}
+    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+
+    if file_extension not in allowed_extensions:
+        return {"error": "Invalid file format. Please upload a JPG, JPEG, or PNG file."}
+
+    # Save file temporarily
+    file_path = default_storage.save(
+        "temp/" + uploaded_file.name, ContentFile(uploaded_file.read())
+    )
+    full_path = os.path.join(default_storage.location, file_path)
+
+    # Initialize VQA agent
+    vqa = VisualQA(api_key=api_key)
+
+    # Get answer from the model
+    response = vqa.ask(image_path=full_path, question=question)
+
+    # Cleanup temporary file
+    default_storage.delete(file_path)
+
+    return {"answer": response}
 
 
 # ______________________________________________________Ends Here and next api starts_________________________________
