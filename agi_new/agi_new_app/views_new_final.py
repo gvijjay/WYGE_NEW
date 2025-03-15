@@ -883,7 +883,7 @@ def handle_fill_missing_data(file, openai_api_key):
 
 
 # 3rd application-ATS Tracker##########
-from wyge.prebuilt_agents.ats import ResumeAnalyzer
+from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
 def analyze_resume(job_description, resume_file,api_key):
     try:
         if not job_description or not resume_file:
