@@ -917,8 +917,6 @@ def handle_fill_missing_data(file, openai_api_key):
 
 # 3rd application-ATS Tracker##########
 from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
-
-
 def analyze_resume(job_description, resume_file, api_key):
     try:
         if not job_description or not resume_file:
@@ -943,17 +941,18 @@ def analyze_resume(job_description, resume_file, api_key):
 # Application 4: Chat to doc (rag) with page extraction from start to end
 from wyge.prebuilt_agents.rag import RAGApplication
 import tempfile
-
-
 def document_question_answering(api_key, uploaded_file, query):
     try:
         if not api_key or not uploaded_file:
             return {"error": "Missing API key or document file"}
 
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-            tmp_file.write(uploaded_file.read())
-            file_path = tmp_file.name
+        # Ensure the uploads folder exists
+        upload_folder = ensure_upload_folder()
+
+        # Save the uploaded file to the uploads folder
+        file_path = os.path.join(upload_folder, uploaded_file.name)
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.read())
 
         # Parse page range
         page_range = "0-25"
