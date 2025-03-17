@@ -416,28 +416,6 @@ def run_openai_environment(request):
             else:
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Second Application: Synthetic_data_generator
-        if 'synthetic_data_generation' in agent[4]:
-            print("Starting...........................")
-            if user_prompt and file:
-                print("Extend data condition")
-                result = handle_synthetic_data_from_excel(file,openai_api_key,user_prompt)
-                if "data" in result:
-                    response_data["csv_file"] = result["data"]
-                    return Response(response_data, status=status.HTTP_200_OK)
-            elif file:
-                print("missing_data_condition")
-                result= handle_fill_missing_data(file,openai_api_key)
-                if "data" in result:
-                    response_data["csv_file"] = result["data"]
-                    return Response(response_data, status=status.HTTP_200_OK)
-            else:
-                print("New data condition")
-                result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
-                if "data" in result:
-                    response_data["csv_file"] = result["data"]
-                    return Response(response_data, status=status.HTTP_200_OK)
-
         # 3rd application:ATS Tracker
         if file and user_prompt and 'ats_tracker' in agent[4]:
             result = analyze_resume(user_prompt, file,openai_api_key)
@@ -498,6 +476,29 @@ def run_openai_environment(request):
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+
+        # Second Application: Synthetic_data_generator
+        if 'synthetic_data_generation' in agent[4]:
+            print("Starting...........................")
+            if user_prompt and file:
+                print("Extend data condition")
+                result = handle_synthetic_data_from_excel(file, openai_api_key, user_prompt)
+                if "data" in result:
+                    response_data["csv_file"] = result["data"]
+                    return Response(response_data, status=status.HTTP_200_OK)
+            elif file:
+                print("missing_data_condition")
+                result = handle_fill_missing_data(file, openai_api_key)
+                if "data" in result:
+                    response_data["csv_file"] = result["data"]
+                    return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                print("New data condition")
+                result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
+                if "data" in result:
+                    response_data["csv_file"] = result["data"]
+                    return Response(response_data, status=status.HTTP_200_OK)
+
 
 
         else:
