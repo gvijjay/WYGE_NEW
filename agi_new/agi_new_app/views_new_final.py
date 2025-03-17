@@ -411,12 +411,11 @@ def run_openai_environment(request):
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "chartData" in result:
                 # Visualization result
-                response_data["chartData"] = result["chartData"]
-                return Response(response_data, status=status.HTTP_200_OK)
+
+                return Response(result, status=status.HTTP_200_OK)
             elif "answer" in result:
                 # Text-based result
-                response_data["answer"] = result["answer"]
-                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
             else:
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -439,8 +438,7 @@ def run_openai_environment(request):
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             if "answer" in result:
-                response_data["answer"] = result["answer"]
-                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
         # 5th application: Travel planner agent
         elif user_prompt and 'travel_planner' in agent[4]:
@@ -514,7 +512,7 @@ def run_openai_environment(request):
             else:
                 print("New data condition")
                 result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
-                
+
             if result and "data" in result:
                 return Response(result, status=status.HTTP_200_OK)
             elif result and "error" in result:
