@@ -13,7 +13,6 @@ from openai import OpenAI, OpenAIError
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 
-
 from .database import PostgreSQLDB
 
 db = PostgreSQLDB(dbname='test', user='test_owner', password='tcWI7unQ6REA')
@@ -355,7 +354,8 @@ import sys
 import numpy as np
 from plotly.graph_objs import Figure
 
-#For travel planner agent
+
+# For travel planner agent
 def extract_travel_details(prompt):
     """
     Extracts destination and number of days from a user's travel request prompt with improved accuracy.
@@ -378,11 +378,14 @@ def extract_travel_details(prompt):
         if not destination or not days:
             return {"error": "Could not extract destination or number of days from prompt."}
 
-        return destination,days
+        return destination, days
     except Exception as e:
         return {"error": f"Error processing prompt: {str(e)}"}
 
+
 from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
+
+
 @api_view(['POST'])
 def run_openai_environment(request):
     try:
@@ -390,7 +393,6 @@ def run_openai_environment(request):
         user_prompt = request.data.get('prompt', '')
         file = request.FILES.get('file')
         user_prompt1 = request.data.get('prompt', '')
-
 
         # Retrieve agent details
         agent = db.read_agent(agent_id)
@@ -421,8 +423,8 @@ def run_openai_environment(request):
 
         # 3rd application:ATS Tracker
         elif file and user_prompt and 'ats_tracker' in agent[4]:
-            result = analyze_resume(user_prompt, file,openai_api_key)
-            print("result is",result)
+            result = analyze_resume(user_prompt, file, openai_api_key)
+            print("result is", result)
             # Validate response format
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
@@ -433,20 +435,17 @@ def run_openai_environment(request):
         # 4th application : Chat to doc within specific page numbers and querying
         elif file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
             result = document_question_answering(openai_api_key, file, user_prompt)
-            if not result:
-                return Response({"error": "analyze_resume() returned None."},
-                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            print("result is", result)
             if "answer" in result:
                 return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
         # 5th application: Travel planner agent
         elif user_prompt and 'travel_planner' in agent[4]:
-            travel_planner_agent=TravelPlannerAgent(openai_api_key)
-            destination,days= travel_planner_agent.parse_user_input(user_prompt)
-            print("Destination:",destination)
-            print("Days",days)
-            result=generate_travel_plan(destination,days,openai_api_key)
+            travel_planner_agent = TravelPlannerAgent(openai_api_key)
+            destination, days = travel_planner_agent.parse_user_input(user_prompt)
+            print("Destination:", destination)
+            print("Days", days)
+            result = generate_travel_plan(destination, days, openai_api_key)
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -455,32 +454,32 @@ def run_openai_environment(request):
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
-        #6th Application:Medical Diagnosis Agent
+        # 6th Application:Medical Diagnosis Agent
         elif file and 'medical_diagnosis' in agent[4]:
-            result=run_medical_diagnosis(openai_api_key,file.read().decode("utf-8"))
+            result = run_medical_diagnosis(openai_api_key, file.read().decode("utf-8"))
             print(result)
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             if "diagnosis" in result:
-                return Response(markdown_to_html(result),status=status.HTTP_200_OK)
+                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
-        #7th Application:Education Agent
+        # 7th Application:Education Agent
         elif user_prompt and 'edu_gpt' in agent[4]:
-            result1= start_learning(request,user_prompt,openai_api_key)
+            result1 = start_learning(request, user_prompt, openai_api_key)
             if result1 in request.session:
-                result= chat_with_agent(request,user_prompt1)
+                result = chat_with_agent(request, user_prompt1)
                 if "assistant_response" in result:
-                    response_data["user_message"]=result["user_message"]
-                    response_data["assistant_response"]=result["assistant_response"]
+                    response_data["user_message"] = result["user_message"]
+                    response_data["assistant_response"] = result["assistant_response"]
                     return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
             else:
-                return Response({"error": "Some error message"},status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Some error message"}, status=status.HTTP_400_BAD_REQUEST)
 
-        #8th Application:medical Image processing
+        # 8th Application:medical Image processing
         elif file and 'image_processing' in agent[4]:
-            result=medical_image_analysis(openai_api_key,file)
+            result = medical_image_analysis(openai_api_key, file)
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -490,9 +489,9 @@ def run_openai_environment(request):
                 response_data["simplified_explanation"] = result["simplified_explanation"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
-        #9th Application:
+        # 9th Application:
         elif file and user_prompt and 'image_answering' in agent[4]:
-            result=visual_question_answering(openai_api_key,file,user_prompt)
+            result = visual_question_answering(openai_api_key, file, user_prompt)
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -530,6 +529,7 @@ def run_openai_environment(request):
 def markdown_to_html(md_text):
     html_text = markdown.markdown(md_text)
     return html_text
+
 
 # 1st Application:Text-to-sql(Both text and graph)
 USER = 'test_owner'
@@ -786,7 +786,8 @@ def execute_py_code(code, df):
 import pandas as pd
 import tempfile
 import re
-from wyge.prebuilt_agents.synthetic_data_generator import generate_synthetic_data, generate_data_from_text, fill_missing_data_in_chunk
+from wyge.prebuilt_agents.synthetic_data_generator import generate_synthetic_data, generate_data_from_text, \
+    fill_missing_data_in_chunk
 
 
 # 1.New data generation
@@ -854,7 +855,8 @@ def ensure_upload_folder():
         os.makedirs(upload_folder)
     return upload_folder
 
-#Extended data
+
+# Extended data
 def handle_synthetic_data_from_excel(file, openai_api_key, user_prompt):
     try:
         file_extension = os.path.splitext(file.name)[1].lower()
@@ -885,7 +887,7 @@ def handle_synthetic_data_from_excel(file, openai_api_key, user_prompt):
         return {"error": str(e)}
 
 
-#Missing Data
+# Missing Data
 def handle_fill_missing_data(file, openai_api_key):
     try:
         file_extension = os.path.splitext(file.name)[1].lower()
@@ -915,7 +917,9 @@ def handle_fill_missing_data(file, openai_api_key):
 
 # 3rd application-ATS Tracker##########
 from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
-def analyze_resume(job_description, resume_file,api_key):
+
+
+def analyze_resume(job_description, resume_file, api_key):
     try:
         if not job_description or not resume_file:
             return {"error": "Missing job description or resume file"}
@@ -939,6 +943,8 @@ def analyze_resume(job_description, resume_file,api_key):
 # Application 4: Chat to doc (rag) with page extraction from start to end
 from wyge.prebuilt_agents.rag import RAGApplication
 import tempfile
+
+
 def document_question_answering(api_key, uploaded_file, query):
     try:
         if not api_key or not uploaded_file:
@@ -950,7 +956,7 @@ def document_question_answering(api_key, uploaded_file, query):
             file_path = tmp_file.name
 
         # Parse page range
-        page_range="0-25"
+        page_range = "0-25"
         parsed_page_range = None
         if page_range:
             try:
@@ -961,11 +967,6 @@ def document_question_answering(api_key, uploaded_file, query):
 
         # Initialize RAG application
         rag_app = RAGApplication(file_paths=[file_path], openai_api_key=api_key, page_range=parsed_page_range)
-
-        # Query processing
-        if not query:
-            return {"error": "No query provided"}
-
         response = rag_app.query(query)
         return {"answer": response}
 
@@ -975,20 +976,21 @@ def document_question_answering(api_key, uploaded_file, query):
 
 # 5th application : Travel planner agent
 from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
-def generate_travel_plan(destination, days,openai_api_key):
+
+
+def generate_travel_plan(destination, days, openai_api_key):
     try:
         if not destination:
             return {"error": "Missing destination"}
         if not days:
-            return {"error":"Days required"}
-        print("In function destination",destination)
-        print("In function_days",days)
-
+            return {"error": "Days required"}
+        print("In function destination", destination)
+        print("In function_days", days)
 
         # Get API keys with fallback values
         # weather_api_key =weather_api_key  # get_api_key("WEATHER_API_KEY", "f701a9b1299fa3bbb07471570c730090")
         # geolocation_api_key = geolocation_api_key  #get_api_key("GEOCODING_API_KEY", "2f85379af3084ad1a9fc724dfa71b041")
-        openai_api_key =openai_api_key
+        openai_api_key = openai_api_key
 
         # Initialize travel planner agent
         agent = TravelPlannerAgent(
@@ -1005,9 +1007,10 @@ def generate_travel_plan(destination, days,openai_api_key):
         return {"error": f"Error occurred: {str(e)}"}
 
 
-
 ## 6th application:Medical diagnosis agent
 from wyge.prebuilt_agents.medical_diagnosis import Cardiologist, Psychologist, Pulmonologist
+
+
 def run_medical_diagnosis(api_key, medical_report):
     try:
         if not api_key:
@@ -1043,13 +1046,14 @@ from langchain.chat_models import ChatOpenAI
 from wyge.prebuilt_agents.teaching_agent import teaching_agent_fun
 from wyge.prebuilt_agents.generating_syllabus import generate_syllabus
 
+
 # Initialize OpenAI model
-def start_learning(request,topic,api_key):
+def start_learning(request, topic, api_key):
     try:
         if not topic:
             return JsonResponse({"error": "Topic is required."}, status=400)
 
-        llm = ChatOpenAI(temperature=0.7,api_key=api_key)
+        llm = ChatOpenAI(temperature=0.7, api_key=api_key)
 
         syllabus = generate_syllabus(llm, topic, "Focus on providing a clear learning path.")
         teaching_agent = teaching_agent_fun(llm)
@@ -1064,7 +1068,8 @@ def start_learning(request,topic,api_key):
     except Exception as e:
         return {"error": str(e)}
 
-def chat_with_agent(request,user_input):
+
+def chat_with_agent(request, user_input):
     try:
         if "teaching_agent" not in request.session:
             return JsonResponse({"error": "Start a topic first."}, status=400)
@@ -1084,13 +1089,15 @@ def chat_with_agent(request,user_input):
     except Exception as e:
         return {"error": str(e)}
 
-#8th application:medical image proccessing agent
+
+# 8th application:medical image proccessing agent
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from wyge.prebuilt_agents.medical_image_processing import MedicalImageAnalyzer
 import os
 
-def medical_image_analysis(api_key,uploaded_file):
+
+def medical_image_analysis(api_key, uploaded_file):
     # Ensure the file is in an allowed format
     allowed_extensions = {".jpg", ".jpeg", ".png"}
     file_extension = os.path.splitext(uploaded_file.name)[1].lower()
@@ -1115,9 +1122,12 @@ def medical_image_analysis(api_key,uploaded_file):
 
     return {"result": result, "simplified_explanation": simplified_explanation}
 
-#9th Application:Image answering application
+
+# 9th Application:Image answering application
 from wyge.prebuilt_agents.vqa import VisualQA
 import os
+
+
 def visual_question_answering(api_key, uploaded_file, question):
     # Ensure the file is in an allowed format
     allowed_extensions = {".jpg", ".jpeg", ".png"}
@@ -1795,4 +1805,3 @@ def list_github_repositories(authorization_code):
     except Exception as e:
         print(f"Failed to fetch GitHub repositories: {str(e)}")
         return None
-
