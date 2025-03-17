@@ -514,11 +514,11 @@ def run_openai_environment(request):
             else:
                 print("New data condition")
                 result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
-
-            if "data" in result:
+                
+            if result and "data" in result:
                 return Response(result, status=status.HTTP_200_OK)
-            # elif result and "error" in result:
-            #     return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            elif result and "error" in result:
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
             else:
                 return Response({"error": "An unexpected error occurred."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
