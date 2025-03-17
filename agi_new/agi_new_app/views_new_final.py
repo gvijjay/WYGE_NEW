@@ -468,17 +468,17 @@ def run_openai_environment(request):
             if "diagnosis" in result:
                 return Response(markdown_to_html(result),status=status.HTTP_200_OK)
 
-        # #7th Application:Education Agent
-        # elif user_prompt and 'edu_gpt' in agent[4]:
-        #     result1= start_learning(request,user_prompt,openai_api_key)
-        #     if result1 in request.session:
-        #         result= chat_with_agent(request,user_prompt1)
-        #         if "assistant_response" in result:
-        #             response_data["user_message"]=result["user_message"]
-        #             response_data["assistant_response"]=result["assistant_response"]
-        #             return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
-        #     else:
-        #         return Response({"error": "Some error message"},status=status.HTTP_400_BAD_REQUEST)
+        #7th Application:Education Agent
+        elif user_prompt and 'edu_gpt' in agent[4]:
+            result1= start_learning(request,user_prompt,openai_api_key)
+            if result1 in request.session:
+                result= chat_with_agent(request,user_prompt1)
+                if "assistant_response" in result:
+                    response_data["user_message"]=result["user_message"]
+                    response_data["assistant_response"]=result["assistant_response"]
+                    return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+            else:
+                return Response({"error": "Some error message"},status=status.HTTP_400_BAD_REQUEST)
 
         #8th Application:medical Image processing
         elif file and 'image_processing' in agent[4]:
@@ -498,7 +498,6 @@ def run_openai_environment(request):
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
@@ -510,20 +509,17 @@ def run_openai_environment(request):
                 print("Extend data condition")
                 result = handle_synthetic_data_from_excel(file, openai_api_key, user_prompt)
                 if "data" in result:
-                    response_data["csv_file"] = result["data"]
-                    return Response(response_data, status=status.HTTP_200_OK)
+                    return Response(result, status=status.HTTP_200_OK)
             elif file:
                 print("missing_data_condition")
                 result = handle_fill_missing_data(file, openai_api_key)
                 if "data" in result:
-                    response_data["csv_file"] = result["data"]
-                    return Response(response_data, status=status.HTTP_200_OK)
+                    return Response(result, status=status.HTTP_200_OK)
             else:
                 print("New data condition")
                 result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
                 if "data" in result:
-                    response_data["csv_file"] = result["data"]
-                    return Response(response_data, status=status.HTTP_200_OK)
+                    return Response(result, status=status.HTTP_200_OK)
         else:
             return Response({"error": "No valid tool found for the given input."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1042,51 +1038,51 @@ def run_medical_diagnosis(api_key, medical_report):
         return {"error": str(e)}
 
 
-# ## 7th application: Education Agent
-# from langchain.chat_models import ChatOpenAI
-# from wyge.prebuilt_agents.teaching_agent import teaching_agent_fun
-# from wyge.prebuilt_agents.generating_syllabus import generate_syllabus
-#
-# # Initialize OpenAI model
-# def start_learning(request,topic,api_key):
-#     try:
-#         if not topic:
-#             return JsonResponse({"error": "Topic is required."}, status=400)
-#
-#         llm = ChatOpenAI(temperature=0.7,api_key=api_key)
-#
-#         syllabus = generate_syllabus(llm, topic, "Focus on providing a clear learning path.")
-#         teaching_agent = teaching_agent_fun(llm)
-#         teaching_agent["seed"](syllabus, topic)
-#
-#         request.session["teaching_agent"] = teaching_agent
-#         request.session["current_topic"] = topic
-#         request.session["messages"] = []
-#         request.session.modified = True
-#
-#         return {"topic": topic, "syllabus": syllabus}
-#     except Exception as e:
-#         return {"error": str(e)}
-#
-# def chat_with_agent(request,user_input):
-#     try:
-#         if "teaching_agent" not in request.session:
-#             return JsonResponse({"error": "Start a topic first."}, status=400)
-#
-#         if not user_input:
-#             return JsonResponse({"error": "Message cannot be empty."}, status=400)
-#
-#         teaching_agent = request.session["teaching_agent"]
-#         teaching_agent["add_user_message"](user_input)
-#         response = teaching_agent["generate_response"]().content
-#
-#         messages = teaching_agent["conversation_history"]()
-#         request.session["messages"] = messages
-#         request.session.modified = True
-#
-#         return {"user_message": user_input, "assistant_response": response}
-#     except Exception as e:
-#         return {"error": str(e)}
+## 7th application: Education Agent
+from langchain.chat_models import ChatOpenAI
+from wyge.prebuilt_agents.teaching_agent import teaching_agent_fun
+from wyge.prebuilt_agents.generating_syllabus import generate_syllabus
+
+# Initialize OpenAI model
+def start_learning(request,topic,api_key):
+    try:
+        if not topic:
+            return JsonResponse({"error": "Topic is required."}, status=400)
+
+        llm = ChatOpenAI(temperature=0.7,api_key=api_key)
+
+        syllabus = generate_syllabus(llm, topic, "Focus on providing a clear learning path.")
+        teaching_agent = teaching_agent_fun(llm)
+        teaching_agent["seed"](syllabus, topic)
+
+        request.session["teaching_agent"] = teaching_agent
+        request.session["current_topic"] = topic
+        request.session["messages"] = []
+        request.session.modified = True
+
+        return {"topic": topic, "syllabus": syllabus}
+    except Exception as e:
+        return {"error": str(e)}
+
+def chat_with_agent(request,user_input):
+    try:
+        if "teaching_agent" not in request.session:
+            return JsonResponse({"error": "Start a topic first."}, status=400)
+
+        if not user_input:
+            return JsonResponse({"error": "Message cannot be empty."}, status=400)
+
+        teaching_agent = request.session["teaching_agent"]
+        teaching_agent["add_user_message"](user_input)
+        response = teaching_agent["generate_response"]().content
+
+        messages = teaching_agent["conversation_history"]()
+        request.session["messages"] = messages
+        request.session.modified = True
+
+        return {"user_message": user_input, "assistant_response": response}
+    except Exception as e:
+        return {"error": str(e)}
 
 #8th application:medical image proccessing agent
 from django.core.files.storage import default_storage
