@@ -425,12 +425,19 @@ def run_openai_environment(request):
             result = analyze_resume(user_prompt, file,openai_api_key)
             print("result is",result)
             # Validate response format
+            if not result:
+                return Response({"error": "analyze_resume() returned None."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "answer" in result:
                 return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
         # 4th application : Chat to doc within specific page numbers and querying
         elif file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
             result = document_question_answering(openai_api_key, file, user_prompt)
+            if not result:
+                return Response({"error": "analyze_resume() returned None."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
@@ -442,6 +449,10 @@ def run_openai_environment(request):
             print("Destination:",destination)
             print("Days",days)
             result=generate_travel_plan(destination,days,openai_api_key)
+            if not result:
+                return Response({"error": "analyze_resume() returned None."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
@@ -450,6 +461,10 @@ def run_openai_environment(request):
         elif file and 'medical_diagnosis' in agent[4]:
             result=run_medical_diagnosis(openai_api_key,file.read().decode("utf-8"))
             print(result)
+            if not result:
+                return Response({"error": "analyze_resume() returned None."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             if "diagnosis" in result:
                 return Response(markdown_to_html(result),status=status.HTTP_200_OK)
 
@@ -468,6 +483,10 @@ def run_openai_environment(request):
         #8th Application:medical Image processing
         elif file and 'image_processing' in agent[4]:
             result=medical_image_analysis(openai_api_key,file)
+            if not result:
+                return Response({"error": "analyze_resume() returned None."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             if "result" in result:
                 response_data["result"] = result["result"]
                 response_data["simplified_explanation"] = result["simplified_explanation"]
@@ -476,6 +495,10 @@ def run_openai_environment(request):
         #9th Application:
         elif file and user_prompt and 'image_answering' in agent[4]:
             result=visual_question_answering(openai_api_key,file,user_prompt)
+            if not result:
+                return Response({"error": "analyze_resume() returned None."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
