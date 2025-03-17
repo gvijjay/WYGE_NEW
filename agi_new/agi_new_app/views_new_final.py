@@ -436,12 +436,10 @@ def run_openai_environment(request):
         elif file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
             result = document_question_answering(openai_api_key, file, user_prompt)
             print("result is", result)
-            # if "answer" in result:
-            #     return Response(markdown_to_html(result), status=status.HTTP_200_OK)
-            if isinstance(result, dict) and "answer" in result:
-                response = result["answer"]
-                return Response(markdown_to_html(response), status=status.HTTP_200_OK)
-
+            if "answer" in result:
+                html_response = markdown_to_html(result["answer"])
+                return Response({"answer": html_response}, status=status.HTTP_200_OK)
+                
         # 5th application: Travel planner agent
         elif user_prompt and 'travel_planner' in agent[4]:
             travel_planner_agent = TravelPlannerAgent(openai_api_key)
@@ -970,6 +968,19 @@ def document_question_answering(api_key, uploaded_file, query):
         # Initialize RAG application
         rag_app = RAGApplication(file_paths=[file_path], openai_api_key=api_key, page_range=parsed_page_range)
         response = rag_app.query(query)
+        # Debug: Check the type of response
+        print("Response from RAGApplication:", response)
+        print("Response type:", type(response))
+
+        # Ensure response is a string
+        if isinstance(response, dict):
+            if "answer" in response:
+                response = response["answer"]
+            else:
+                return {"error": "Unexpected response format from RAGApplication: missing 'answer' key"}
+        elif not isinstance(response, str):
+            response = str(response)  # Convert to string if not already
+
         return {"answer": response}
 
     except Exception as e:
