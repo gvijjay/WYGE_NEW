@@ -412,7 +412,7 @@ def run_openai_environment(request):
             elif "answer" in result:
                 # Text-based result
                 response_data["answer"] = result["answer"]
-                return Response(response_data, status=status.HTTP_200_OK)
+                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
             else:
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -444,14 +444,14 @@ def run_openai_environment(request):
             print("result is",result)
             # Validate response format
             if "answer" in result:
-                return Response(result, status=status.HTTP_200_OK)
+                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
         # 4th application : Chat to doc within specific page numbers and querying
         if file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
             result = document_question_answering(openai_api_key, file, user_prompt)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
-                return Response(response_data, status=status.HTTP_200_OK)
+                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
         # 5th application: Travel planner agent
         from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
@@ -463,14 +463,14 @@ def run_openai_environment(request):
             result=generate_travel_plan(destination,days,openai_api_key)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
-                return Response(response_data, status=status.HTTP_200_OK)
+                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
         #6th Application:Medical Diagnosis Agent
         if file and 'medical_diagnosis' in agent[4]:
             result=run_medical_diagnosis(openai_api_key,file.read().decode("utf-8"))
             print(result)
             if "diagnosis" in result:
-                return Response(result,status=status.HTTP_200_OK)
+                return Response(markdown_to_html(result),status=status.HTTP_200_OK)
 
         #7th Application:Education Agent
         if user_prompt and 'edu_gpt' in agent[4]:
@@ -480,7 +480,7 @@ def run_openai_environment(request):
                 if "assistant_response" in result:
                     response_data["user_message"]=result["user_message"]
                     response_data["assistant_response"]=result["assistant_response"]
-                    return Response(response_data, status=status.HTTP_200_OK)
+                    return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
             else:
                 return Response({"error"},status=status.HTTP_400_BAD_REQUEST)
 
@@ -490,14 +490,14 @@ def run_openai_environment(request):
             if "result" in result:
                 response_data["result"] = result["result"]
                 response_data["simplified_explanation"] = result["simplified_explanation"]
-                return Response(response_data, status=status.HTTP_200_OK)
+                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
         #9th Application:
         if file and user_prompt and 'image_answering' in agent[4]:
             result=visual_question_answering(openai_api_key,file,user_prompt)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
-                return Response(response_data, status=status.HTTP_200_OK)
+                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
 
         else:
@@ -506,6 +506,10 @@ def run_openai_environment(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+def markdown_to_html(md_text):
+    html_text = markdown.markdown(md_text)
+    return html_text
 
 # 1st Application:Text-to-sql(Both text and graph)
 USER = 'test_owner'
