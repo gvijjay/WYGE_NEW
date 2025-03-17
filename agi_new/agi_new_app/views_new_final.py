@@ -436,8 +436,11 @@ def run_openai_environment(request):
         elif file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
             result = document_question_answering(openai_api_key, file, user_prompt)
             print("result is", result)
-            if "answer" in result:
-                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
+            # if "answer" in result:
+            #     return Response(markdown_to_html(result), status=status.HTTP_200_OK)
+            if isinstance(result, dict) and "answer" in result:
+                response = result["answer"]
+                return Response(markdown_to_html(response), status=status.HTTP_200_OK)
 
         # 5th application: Travel planner agent
         elif user_prompt and 'travel_planner' in agent[4]:
