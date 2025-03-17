@@ -390,119 +390,97 @@ def run_openai_environment(request):
         file = request.FILES.get('file')
         user_prompt1 = request.data.get('prompt', '')
 
-
-        # Retrieve agent details
         agent = db.read_agent(agent_id)
-
-        # Retrieve the API key from the environment table using env_id
         env_details = db.read_environment(agent[7])
         openai_api_key = env_details[2]
         client = OpenAI(api_key=openai_api_key)
 
         response_data = {}
 
-        # First Application: Text_to_sql
         if user_prompt and 'text_to_sql' in agent[4]:
             result = gen_response(file, user_prompt, client)
-            # Handle the result from gen_response
+            if not result:
+                return Response({"error": "gen_response() returned None."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "chartData" in result:
-                # Visualization result
                 response_data["chartData"] = result["chartData"]
                 return Response(response_data, status=status.HTTP_200_OK)
             elif "answer" in result:
-                # Text-based result
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
-            else:
-                return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3rd application:ATS Tracker
         if file and user_prompt and 'ats_tracker' in agent[4]:
-            result = analyze_resume(user_prompt, file,openai_api_key)
-            print("result is",result)
-            # Validate response format
+            result = analyze_resume(user_prompt, file, openai_api_key)
+            if not result:
+                return Response({"error": "analyze_resume() returned None."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "answer" in result:
                 return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
-        # 4th application : Chat to doc within specific page numbers and querying
         if file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
             result = document_question_answering(openai_api_key, file, user_prompt)
+            if not result:
+                return Response({"error": "document_question_answering() returned None."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
-        # 5th application: Travel planner agent
         from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
         if user_prompt and 'travel_planner' in agent[4]:
-            travel_planner_agent=TravelPlannerAgent(openai_api_key)
-            destination,days= travel_planner_agent.parse_user_input(user_prompt)
-            print("Destination:",destination)
-            print("Days",days)
-            result=generate_travel_plan(destination,days,openai_api_key)
+            travel_planner_agent = TravelPlannerAgent(openai_api_key)
+            destination, days = travel_planner_agent.parse_user_input(user_prompt)
+            result = generate_travel_plan(destination, days, openai_api_key)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
-        #6th Application:Medical Diagnosis Agent
         if file and 'medical_diagnosis' in agent[4]:
-            result=run_medical_diagnosis(openai_api_key,file.read().decode("utf-8"))
-            print(result)
+            result = run_medical_diagnosis(openai_api_key, file.read().decode("utf-8"))
+            if not result:
+                return Response({"error": "run_medical_diagnosis() returned None."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "diagnosis" in result:
-                return Response(markdown_to_html(result),status=status.HTTP_200_OK)
+                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
-        #7th Application:Education Agent
         if user_prompt and 'edu_gpt' in agent[4]:
-            result1= start_learning(request,user_prompt,openai_api_key)
+            result1 = start_learning(request, user_prompt, openai_api_key)
             if result1 in request.session:
-                result= chat_with_agent(request,user_prompt1)
+                result = chat_with_agent(request, user_prompt1)
                 if "assistant_response" in result:
-                    response_data["user_message"]=result["user_message"]
-                    response_data["assistant_response"]=result["assistant_response"]
+                    response_data["user_message"] = result["user_message"]
+                    response_data["assistant_response"] = result["assistant_response"]
                     return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
-            else:
-                return Response({"error"},status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Session validation failed."}, status=status.HTTP_400_BAD_REQUEST)
 
-        #8th Application:medical Image processing
         if file and 'image_processing' in agent[4]:
-            result=medical_image_analysis(openai_api_key,file)
+            result = medical_image_analysis(openai_api_key, file)
             if "result" in result:
                 response_data["result"] = result["result"]
                 response_data["simplified_explanation"] = result["simplified_explanation"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
-        #9th Application:
         if file and user_prompt and 'image_answering' in agent[4]:
-            result=visual_question_answering(openai_api_key,file,user_prompt)
+            result = visual_question_answering(openai_api_key, file, user_prompt)
             if "answer" in result:
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
-        # Second Application: Synthetic_data_generator
         if 'synthetic_data_generation' in agent[4]:
-            print("Starting...........................")
             if user_prompt and file:
-                print("Extend data condition")
                 result = handle_synthetic_data_from_excel(file, openai_api_key, user_prompt)
                 if "data" in result:
                     response_data["csv_file"] = result["data"]
                     return Response(response_data, status=status.HTTP_200_OK)
             elif file:
-                print("missing_data_condition")
                 result = handle_fill_missing_data(file, openai_api_key)
                 if "data" in result:
                     response_data["csv_file"] = result["data"]
                     return Response(response_data, status=status.HTTP_200_OK)
             else:
-                print("New data condition")
                 result = handle_synthetic_data_for_new_data(user_prompt, openai_api_key)
                 if "data" in result:
                     response_data["csv_file"] = result["data"]
                     return Response(response_data, status=status.HTTP_200_OK)
 
-
-
-        else:
-            return Response({"error": "No valid tool found for the given input."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "No valid tool found for the given input."}, status=status.HTTP_400_BAD_REQUEST)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
