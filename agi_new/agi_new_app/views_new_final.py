@@ -383,7 +383,15 @@ def extract_travel_details(prompt):
         return {"error": f"Error processing prompt: {str(e)}"}
 
 
-from wyge.prebuilt_agents.travel_planner import TravelPlannerAgent
+# Differentiation of the url:
+def differentiate_url(url):
+    youtube_patterns = [
+        r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/",  # matches youtube.com or youtu.be
+    ]
+    for pattern in youtube_patterns:
+        if re.match(pattern, url):
+            return "YouTube"
+    return "Website"
 
 
 @api_view(['POST'])
@@ -393,6 +401,7 @@ def run_openai_environment(request):
         user_prompt = request.data.get('prompt', '')
         file = request.FILES.get('file')
         user_prompt1 = request.data.get('prompt', '')
+        url = request.data.get('url', '')
 
         # Retrieve agent details
         agent = db.read_agent(agent_id)
@@ -402,10 +411,13 @@ def run_openai_environment(request):
         openai_api_key = env_details[2]
         client = OpenAI(api_key=openai_api_key)
 
+        result = None
         response_data = {}
+        BLOG_TOOL_IDS = ['blog_post', 'audio_blog', 'video_blog', 'youtube_blog']
 
         # First Application: Text_to_sql
-        if user_prompt and 'text_to_sql' in agent[4]:
+        if file and  user_prompt and 'text_to_sql' in agent[4]:
+            print("Text_to_Sql_condition")
             result = gen_response(file, user_prompt, client)
             # Handle the result from gen_response
             if not result:
@@ -413,16 +425,16 @@ def run_openai_environment(request):
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "chartData" in result:
                 # Visualization result
-
-                return Response(result, status=status.HTTP_200_OK)
+                return Response({"chartData":result["chartData"]}, status=status.HTTP_200_OK)
             elif "answer" in result:
                 # Text-based result
-                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
+                return Response({"answer":markdown_to_html(result["answer"])}, status=status.HTTP_200_OK)
             else:
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3rd application:ATS Tracker
         elif file and user_prompt and 'ats_tracker' in agent[4]:
+            print("Ats_tracker_condition")
             result = analyze_resume(user_prompt, file, openai_api_key)
             print("result is", result)
             # Validate response format
@@ -434,14 +446,16 @@ def run_openai_environment(request):
 
         # 4th application : Chat to doc within specific page numbers and querying
         elif file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
+            print("rag condition")
             result = document_question_answering(openai_api_key, file, user_prompt)
             print("result is", result)
             if "answer" in result:
                 html_response = markdown_to_html(result["answer"])
                 return Response({"answer": html_response}, status=status.HTTP_200_OK)
-                
+
         # 5th application: Travel planner agent
         elif user_prompt and 'travel_planner' in agent[4]:
+            print("travel_planner condition")
             travel_planner_agent = TravelPlannerAgent(openai_api_key)
             destination, days = travel_planner_agent.parse_user_input(user_prompt)
             print("Destination:", destination)
@@ -457,6 +471,7 @@ def run_openai_environment(request):
 
         # 6th Application:Medical Diagnosis Agent
         elif file and 'medical_diagnosis' in agent[4]:
+            print("medical Diagnosis condition")
             result = run_medical_diagnosis(openai_api_key, file.read().decode("utf-8"))
             print(result)
             if not result:
@@ -468,18 +483,24 @@ def run_openai_environment(request):
 
         # 7th Application:Education Agent
         elif user_prompt and 'edu_gpt' in agent[4]:
+            print("Edugpt condition.....")
             result1 = start_learning(request, user_prompt, openai_api_key)
-            if result1 in request.session:
+            print("After Result", result1)
+
+            # Step 2: Chat with the agent using the session content
+            if 'teaching_agent' in request.session:
+                # Pass the session content to the chat_with_agent function
+                print("True")
                 result = chat_with_agent(request, user_prompt1)
+                # Step 3: Return the response
                 if "assistant_response" in result:
-                    response_data["user_message"] = result["user_message"]
-                    response_data["assistant_response"] = result["assistant_response"]
-                    return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+                    return Response(markdown_to_html(result), status=status.HTTP_200_OK)
             else:
                 return Response({"error": "Some error message"}, status=status.HTTP_400_BAD_REQUEST)
 
         # 8th Application:medical Image processing
         elif file and 'image_processing' in agent[4]:
+            print("image_processing_condition")
             result = medical_image_analysis(openai_api_key, file)
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
@@ -492,6 +513,7 @@ def run_openai_environment(request):
 
         # 9th Application:
         elif file and user_prompt and 'image_answering' in agent[4]:
+            print("image_answering_condition")
             result = visual_question_answering(openai_api_key, file, user_prompt)
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
@@ -500,9 +522,47 @@ def run_openai_environment(request):
                 response_data["answer"] = result["answer"]
                 return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
 
+
+        # 10th application-Blog agents:
+        elif url and user_prompt and any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+            print("Getting the url.............")
+            url_type = differentiate_url(url)
+            print(url_type)
+            # Handling based on URL type
+            if url_type == "YouTube":
+                if any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+                    result = generate_blog_from_yt_url(user_prompt, url, 'blog_post', openai_api_key)
+                elif 'linkedin_post' in agent[4]:
+                    result = generate_blog_from_yt_url(user_prompt, url, 'linkedin_post', openai_api_key)
+            else:  # General Website URL
+                if any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+                    result = generate_blog_from_url(user_prompt, url, 'blog_post', openai_api_key)
+                    print(result)
+                elif 'linkedin_post' in agent[4]:
+                    result = generate_blog_from_url(user_prompt, url, 'linkedin_post', openai_api_key)
+
+            if isinstance(result, dict):
+                response_data = markdown_to_html(result["content"])
+                return Response({"answer": response_data}, status=status.HTTP_200_OK)
+
+
+        # Blog Generation through files
+        elif file and user_prompt  and any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+            if any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+                print("function calling here")
+                result = generate_blog_from_file(user_prompt, file, 'blog_post', openai_api_key)
+                print(result)
+            elif 'linkedin_post' in agent[4]:
+                result = generate_blog_from_file(user_prompt, file, 'linkedin_post', openai_api_key)
+
+            if isinstance(result, dict):
+                response_data = markdown_to_html(result["content"])
+                return Response({"answer": response_data}, status=status.HTTP_200_OK)
+
+
         # Second Application: Synthetic_data_generator
         elif 'synthetic_data_generation' in agent[4]:
-            print("Starting...........................")
+            print("Synthetic_data_condition")
             if user_prompt and file:
                 print("Extend data condition")
                 result = handle_synthetic_data_from_excel(file, openai_api_key, user_prompt)
@@ -532,7 +592,7 @@ def markdown_to_html(md_text):
     return html_text
 
 
-# 1st Application:Text-to-sql(Both text and graph)
+##1st Application:Text-to-sql(Both text and graph)
 USER = 'test_owner'
 PASSWORD = 'tcWI7unQ6REA'
 HOST = 'ep-yellow-recipe-a5fny139.us-east-2.aws.neon.tech:5432'
@@ -621,7 +681,7 @@ def gen_response(file, query, client):
 
                     # Recursively process the chart_data
                     chart_data_serializable = make_serializable(chart_data)
-
+ 
                     # Return the structured response to the frontend
                     return {"chartData": chart_data_serializable}
                 else:
@@ -783,6 +843,41 @@ def execute_py_code(code, df):
     return str(output)
 
 
+##1st application-Text to sql
+
+# from wyge.prebuilt_agents.sql import DataQueryAgent
+# from django.conf import settings
+#
+#
+# def sql_query_view(api_key,uploaded_file,query_text):
+#     context = {"tables": [], "query_history": []}
+#     agent = DataQueryAgent(openai_api_key=api_key, model_name="gpt-4o-mini")
+#
+#     # Handle file upload
+#     if uploaded_file:
+#         file_path = default_storage.save(f"uploads/{uploaded_file.name}", ContentFile(uploaded_file.read()))
+#         abs_file_path = os.path.join(settings.MEDIA_ROOT, file_path)
+#
+#         success = agent.load_data(file_path=abs_file_path)
+#         if success:
+#             context["tables"].append(uploaded_file.name)  # Mock table tracking
+#             context["message"] = "Data loaded successfully!"
+#         else:
+#             context["error"] = "Failed to load data."
+#
+#         os.remove(abs_file_path)  # Clean up uploaded file
+#
+#     # Handle Query Execution
+#     if query_text:
+#         try:
+#             result = agent.query(query_text)
+#             context["query_history"].append({"question": result['input'], "result": result['output']})
+#             context["query_result"] = result['output']
+#             return context["query_result"]
+#         except Exception as e:
+#             context["error"] = f"Error processing query: {str(e)}"
+
+
 ## 2nd Application(Synthetic-data-generator) ---Create and extend data
 import pandas as pd
 import tempfile
@@ -918,6 +1013,8 @@ def handle_fill_missing_data(file, openai_api_key):
 
 # 3rd application-ATS Tracker##########
 from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
+
+
 def analyze_resume(job_description, resume_file, api_key):
     try:
         if not job_description or not resume_file:
@@ -942,6 +1039,8 @@ def analyze_resume(job_description, resume_file, api_key):
 # Application 4: Chat to doc (rag) with page extraction from start to end
 from wyge.prebuilt_agents.rag import RAGApplication
 import tempfile
+
+
 def document_question_answering(api_key, uploaded_file, query):
     try:
         if not api_key or not uploaded_file:
@@ -1058,24 +1157,29 @@ def run_medical_diagnosis(api_key, medical_report):
 from langchain.chat_models import ChatOpenAI
 from wyge.prebuilt_agents.teaching_agent import teaching_agent_fun
 from wyge.prebuilt_agents.generating_syllabus import generate_syllabus
+from django.http import JsonResponse
 
 
-# Initialize OpenAI model
 def start_learning(request, topic, api_key):
     try:
         if not topic:
             return JsonResponse({"error": "Topic is required."}, status=400)
 
+        # Initialize the OpenAI model
         llm = ChatOpenAI(temperature=0.7, api_key=api_key)
 
+        # Generate the syllabus for the topic
         syllabus = generate_syllabus(llm, topic, "Focus on providing a clear learning path.")
+
+        # Initialize the teaching agent
         teaching_agent = teaching_agent_fun(llm)
         teaching_agent["seed"](syllabus, topic)
 
+        # Store data in the session
         request.session["teaching_agent"] = teaching_agent
         request.session["current_topic"] = topic
-        request.session["messages"] = []
-        request.session.modified = True
+        request.session["messages"] = []  # Initialize an empty conversation history
+        request.session.modified = True  # Ensure the session is saved
 
         return {"topic": topic, "syllabus": syllabus}
     except Exception as e:
@@ -1084,21 +1188,35 @@ def start_learning(request, topic, api_key):
 
 def chat_with_agent(request, user_input):
     try:
+        # Check if the teaching agent is initialized
         if "teaching_agent" not in request.session:
             return JsonResponse({"error": "Start a topic first."}, status=400)
 
+        # Validate user input
         if not user_input:
             return JsonResponse({"error": "Message cannot be empty."}, status=400)
 
+        # Retrieve the teaching agent from the session
         teaching_agent = request.session["teaching_agent"]
-        teaching_agent["add_user_message"](user_input)
-        response = teaching_agent["generate_response"]().content
 
+        # Add the user's message to the conversation
+        teaching_agent["add_user_message"](user_input)
+
+        # Generate a response from the teaching agent
+        response = teaching_agent["generate_response"]()
+        print("Response from teaching agent:", response)  # Debug: Check the output of generate_response
+
+        # Ensure the response is a string
+        if hasattr(response, "content"):
+            response_content = response.content
+        else:
+            response_content = str(response)
+
+        # Update the conversation history in the session
         messages = teaching_agent["conversation_history"]()
         request.session["messages"] = messages
-        request.session.modified = True
-
-        return {"user_message": user_input, "assistant_response": response}
+        request.session.modified = True  # Ensure the session is saved
+        return {"user_message": user_input, "assistant_response": response_content}
     except Exception as e:
         return {"error": str(e)}
 
@@ -1165,6 +1283,100 @@ def visual_question_answering(api_key, uploaded_file, question):
     default_storage.delete(file_path)
 
     return {"answer": response}
+
+
+# 10th Application:Blog generation with website,youtube and Audio
+from wyge.prebuilt_agents.social_media_agents import ResearchAgent, BlogAgent, LinkedInAgent
+import os
+
+
+def generate_blog_from_url(prompt, url, option, api_key):
+    if option == 'blog_post':
+        if not url:
+            return {'error': 'Website URL is required'}
+        research_agent = ResearchAgent(api_key=api_key)
+        blog_agent = BlogAgent(api_key=api_key)
+
+        content = research_agent.research_website(prompt, url)
+        blog_post = blog_agent.generate_blog(prompt, str(content))
+        return {'content': blog_post}
+
+    elif option == 'linkedin_post':
+        if not url:
+            return {'error': 'Website URL is required'}
+        research_agent = ResearchAgent(api_key=api_key)
+        linkedin_agent = LinkedInAgent(api_key=api_key)
+
+        content = research_agent.research_website(prompt, url)
+        linkedin_post = linkedin_agent.generate_linkedin_post(prompt, str(content))
+
+        return {'content': linkedin_post}
+
+
+# Generate content from URL (for blog or LinkedIn post)
+def generate_blog_from_yt_url(prompt, url, option, api_key):
+    if option == 'blog_post':
+        if not url:
+            return {'error': 'YouTube video URL is required'}
+        research_agent = ResearchAgent(api_key=api_key)
+        blog_agent = BlogAgent(api_key=api_key)
+
+        content = research_agent.extract_transcript_from_yt_video(url)
+        print("content.............", content)
+        blog_post = blog_agent.generate_blog(prompt, str(content))
+
+        return {'content': blog_post}
+
+    elif option == 'linkedin_post':
+        if not url:
+            return {'error': 'YouTube video URL is required'}
+        research_agent = ResearchAgent(api_key=api_key)
+        linkedin_agent = LinkedInAgent(api_key=api_key)
+
+        content = research_agent.extract_transcript_from_yt_video(url)
+        linkedin_post = linkedin_agent.generate_linkedin_post(prompt, str(content))
+
+        return {'content': linkedin_post}
+
+
+# Generate content from file (for blog or LinkedIn post)
+def generate_blog_from_file(prompt, file, option, api_key):
+    if option == 'blog_post':
+        if not file:
+            return {'error': 'Audio file is required'}
+
+        temp_path = f"temp_{file.name}"
+        with open(temp_path, 'wb') as f:
+            for chunk in file.chunks():
+                f.write(chunk)
+
+        research_agent = ResearchAgent(api_key=api_key)
+        blog_agent = BlogAgent(api_key=api_key)
+
+        content = research_agent.extract_audio_transcript(temp_path)
+        os.remove(temp_path)
+
+        blog_post = blog_agent.generate_blog(prompt, str(content))
+        return {'content': blog_post}
+
+    elif option == 'linkedin_post':
+        if not file:
+            return {'error': 'Audio file is required'}
+
+        temp_path = f"temp_{file.name}"
+        with open(temp_path, 'wb') as f:
+            for chunk in file.chunks():
+                f.write(chunk)
+
+        research_agent = ResearchAgent(api_key=api_key)
+        linkedin_agent = LinkedInAgent(api_key=api_key)
+
+        content = research_agent.extract_audio_transcript(temp_path)
+        os.remove(temp_path)
+
+        linkedin_post = linkedin_agent.generate_linkedin_post(prompt, str(content))
+
+        return {'content': linkedin_post}
 
 
 # ______________________________________________________Ends Here and next api starts_________________________________
