@@ -394,14 +394,31 @@ def differentiate_url(url):
     return "Website"
 
 
+# EDUGPT Helper function.
+def extract_topic_or_query(user_prompt):
+    """
+    Determines if the user input is a topic name or a query.
+    - A topic is usually short, without question words (what, why, how).
+    - A query often contains question words or special characters.
+    """
+    topic_pattern = r"^[A-Za-z\s]+$"  # Allows only letters and spaces (simple topic detection)
+    question_words = ["what", "why", "how", "who", "when", "where", "is", "can", "does", "explain", "?"]
+
+    user_prompt_lower = user_prompt.lower().strip()
+
+    if any(word in user_prompt_lower for word in question_words) or not re.match(topic_pattern, user_prompt):
+        return "query"  # It's a question/query
+    return "topic"  # It's a valid topic name
+
+
 @api_view(['POST'])
 def run_openai_environment(request):
     try:
         agent_id = request.data.get('agent_id')
         user_prompt = request.data.get('prompt', '')
         file = request.FILES.get('file')
-        user_prompt1 = request.data.get('prompt', '')
         url = request.data.get('url', '')
+        file1=request.FILES.getlist("file")
 
         # Retrieve agent details
         agent = db.read_agent(agent_id)
@@ -416,7 +433,7 @@ def run_openai_environment(request):
         BLOG_TOOL_IDS = ['blog_post', 'audio_blog', 'video_blog', 'youtube_blog']
 
         # First Application: Text_to_sql
-        if file and  user_prompt and 'text_to_sql' in agent[4]:
+        if file and user_prompt and 'text_to_sql' in agent[4]:
             print("Text_to_Sql_condition")
             result = gen_response(file, user_prompt, client)
             # Handle the result from gen_response
@@ -425,24 +442,70 @@ def run_openai_environment(request):
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "chartData" in result:
                 # Visualization result
-                return Response({"chartData":result["chartData"]}, status=status.HTTP_200_OK)
+                return Response({"chartData": result["chartData"]}, status=status.HTTP_200_OK)
             elif "answer" in result:
                 # Text-based result
-                return Response({"answer":markdown_to_html(result["answer"])}, status=status.HTTP_200_OK)
+                return Response({"answer": markdown_to_html(result["answer"])}, status=status.HTTP_200_OK)
             else:
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3rd application:ATS Tracker
-        elif file and user_prompt and 'ats_tracker' in agent[4]:
+        elif file1 and user_prompt and 'ats_tracker' in agent[4]:
             print("Ats_tracker_condition")
-            result = analyze_resume(user_prompt, file, openai_api_key)
+            result = analyze_resume(user_prompt, file1, openai_api_key)
             print("result is", result)
+
             # Validate response format
-            if not result:
-                return Response({"error": "analyze_resume() returned None."},
+            if "error" in result:
+                # Handle error case
+                return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Handle single resume analysis
+            if "JD Match" in result:
+                # Convert the relevant parts of the result to markdown (if needed) and return
+                markdown_content = f"""
+                **Job Description Match:** {result.get("JD Match", "N/A")}
+
+                **Missing Keywords:**
+                {", ".join(result.get("MissingKeywords", [])) if result.get("MissingKeywords") else "None"}
+
+                **Profile Summary:**
+                {result.get("Profile Summary", "No summary available")}
+
+                **Suggestions:**
+                {"/n".join([f"- {suggestion}" for suggestion in result.get("Suggestions", [])])}
+                """
+                return Response({"answers": markdown_to_html(markdown_content)}, status=status.HTTP_200_OK)
+
+            # Handle multiple resume analysis
+            elif "summary" in result and "detailed_results" in result:
+                # Convert detailed results to markdown (if needed) and return
+                detailed_results_html = []
+                for res in result["detailed_results"]:
+                    markdown_content = f"""
+                    **Job Description Match:** {res.get("JD Match", "N/A")}
+
+                    **Missing Keywords:**
+                    {", ".join(res.get("MissingKeywords", [])) if res.get("MissingKeywords") else "None"}
+
+                    **Profile Summary:**
+                    {res.get("Profile Summary", "No summary available")}
+
+                    **Suggestions:**
+                    {"/n".join([f"- {suggestion}" for suggestion in res.get("Suggestions", [])])}
+                    """
+                    detailed_results_html.append(markdown_to_html(markdown_content))
+
+                return Response({
+                    "summary": result["summary"],
+                    "detailed_results": detailed_results_html
+                }, status=status.HTTP_200_OK)
+
+            # Handle unexpected response format
+            else:
+                return Response({"error": "Unexpected response format from the analyzer"},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if "answer" in result:
-                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
+
 
         # 4th application : Chat to doc within specific page numbers and querying
         elif file and user_prompt and 'chat_to_doc_within_page_range' in agent[4]:
@@ -481,22 +544,63 @@ def run_openai_environment(request):
             if "diagnosis" in result:
                 return Response(markdown_to_html(result), status=status.HTTP_200_OK)
 
-        # 7th Application:Education Agent
-        elif user_prompt and 'edu_gpt' in agent[4]:
-            print("Edugpt condition.....")
-            result1 = start_learning(request, user_prompt, openai_api_key)
-            print("After Result", result1)
 
-            # Step 2: Chat with the agent using the session content
-            if 'teaching_agent' in request.session:
-                # Pass the session content to the chat_with_agent function
-                print("True")
-                result = chat_with_agent(request, user_prompt1)
-                # Step 3: Return the response
-                if "assistant_response" in result:
-                    return Response(markdown_to_html(result), status=status.HTTP_200_OK)
+        # 7th Application:Education Agent
+        elif user_prompt and "edu_gpt" in agent[4]:
+            prompt_type = extract_topic_or_query(user_prompt)  # Determine if input is a topic or a query
+
+            # If training is in progress, block further queries
+            if request.session.get("training", False):
+                return Response({"message": "Training in progress. Please wait for completion."}, status=status.HTTP_200_OK)
+
+            # If it's a topic name, start learning
+            if prompt_type == "topic":
+                print("EduGPT: Learning about the topic...")
+
+                try:
+                    # Set training flag
+                    request.session["training"] = True
+                    request.session.modified = True
+
+                    # Start learning
+                    result = start_learning(request, user_prompt, openai_api_key)
+                    print("Result is...................")
+
+                    # Training completed
+                    request.session["training"] = False
+                    request.session.modified = True
+                    print(result)
+                    return Response({"answer": result["syllabus"]}, status=status.HTTP_200_OK)
+
+                except Exception as e:
+                    request.session["training"] = False  # Reset training flag on failure
+                    request.session.modified = True
+                    return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # If it's a query, proceed with chat agent
+
+            elif prompt_type == "query":
+                print("EduGPT: Handling query using existing session data...")
+
+                try:
+                    if "syllabus" not in request.session or "current_topic" not in request.session:
+                        return Response({"error": "No training data found. Please start learning first."},
+                                        status=status.HTTP_400_BAD_REQUEST)
+
+                    # Pass API key explicitly to chat_with_agent
+                    result = chat_with_agent(request, user_prompt, openai_api_key)
+
+                    if "error" in result:
+                        return Response({"error": result["error"]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                    return Response({"answer": markdown_to_html(result["assistant_response"])}, status=status.HTTP_200_OK)
+
+                except Exception as e:
+                    return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             else:
-                return Response({"error": "Some error message"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Invalid prompt type. Please provide a valid topic or query."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
         # 8th Application:medical Image processing
         elif file and 'image_processing' in agent[4]:
@@ -524,7 +628,7 @@ def run_openai_environment(request):
 
 
         # 10th application-Blog agents:
-        elif url and user_prompt and any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+        elif url and user_prompt:
             print("Getting the url.............")
             url_type = differentiate_url(url)
             print(url_type)
@@ -547,7 +651,7 @@ def run_openai_environment(request):
 
 
         # Blog Generation through files
-        elif file and user_prompt  and any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
+        elif file and user_prompt:
             if any(tool_id in agent[4] for tool_id in BLOG_TOOL_IDS):
                 print("function calling here")
                 result = generate_blog_from_file(user_prompt, file, 'blog_post', openai_api_key)
@@ -681,7 +785,7 @@ def gen_response(file, query, client):
 
                     # Recursively process the chart_data
                     chart_data_serializable = make_serializable(chart_data)
- 
+
                     # Return the structured response to the frontend
                     return {"chartData": chart_data_serializable}
                 else:
@@ -1012,29 +1116,83 @@ def handle_fill_missing_data(file, openai_api_key):
 
 
 # 3rd application-ATS Tracker##########
+# from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
+# def analyze_resume(job_description, resume_file, api_key):
+#     try:
+#         if not job_description or not resume_file:
+#             return {"error": "Missing job description or resume file"}
+#
+#         # Initialize the Resume Analyzer
+#         analyzer = ResumeAnalyzer(api_key)
+#
+#         # Extract text from the uploaded resume
+#         resume_text = analyzer.extract_text_from_pdf(resume_file)
+#
+#         # Analyze the resume against the job description
+#         result = analyzer.analyze_resume(resume_text, job_description)
+#
+#         return {
+#             "answer": result
+#         }
+#     except Exception as e:
+#         return {"error": str(e)}
+
+#Multiple Resume Tracking
 from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
 
 
-def analyze_resume(job_description, resume_file, api_key):
+def analyze_resume(job_description, resume_files, api_key):
     try:
-        if not job_description or not resume_file:
-            return {"error": "Missing job description or resume file"}
+        if not job_description or not resume_files:
+            return {"error": "Missing job description or resume files"}
 
         # Initialize the Resume Analyzer
         analyzer = ResumeAnalyzer(api_key)
 
-        # Extract text from the uploaded resume
-        resume_text = analyzer.extract_text_from_pdf(resume_file)
+        # Check if it's a single resume or multiple resumes
+        if isinstance(resume_files, list):
+            # Multiple resume analysis
+            results = []
+            for resume_file in resume_files:
+                # Extract text from the uploaded resume
+                resume_text = analyzer.extract_text_from_pdf(resume_file)
 
-        # Analyze the resume against the job description
-        result = analyzer.analyze_resume(resume_text, job_description)
+                # Analyze the resume against the job description
+                result = analyzer.analyze_resume(resume_text, job_description)
 
-        return {
-            "answer": result
-        }
+                # Add filename to the result for identification
+                result["filename"] = resume_file.name
+                results.append(result)
+
+            # Create a summary table
+            summary_data = []
+            for i, result in enumerate(results):
+                summary_data.append({
+                    "Rank": i + 1,
+                    "Resume": result.get("filename", "Unknown"),
+                    "Match %": result.get("JD Match", "0%"),
+                    "Missing Keywords": ", ".join(result.get("MissingKeywords", [])) if result.get(
+                        "MissingKeywords") else "None"
+                })
+
+            return {
+                "summary": summary_data,
+                "detailed_results": results
+            }
+        else:
+            # Single resume analysis
+            resume_text = analyzer.extract_text_from_pdf(resume_files)
+            result = analyzer.analyze_resume(resume_text, job_description)
+
+            return {
+                "JD Match": result.get("JD Match", "0%"),
+                "Missing Keywords": result.get("MissingKeywords", []),
+                "Profile Summary": result.get("Profile Summary", "No summary available"),
+                "Suggestions": result.get("Suggestions", [])
+            }
+
     except Exception as e:
         return {"error": str(e)}
-
 
 # Application 4: Chat to doc (rag) with page extraction from start to end
 from wyge.prebuilt_agents.rag import RAGApplication
@@ -1158,65 +1316,77 @@ from langchain.chat_models import ChatOpenAI
 from wyge.prebuilt_agents.teaching_agent import teaching_agent_fun
 from wyge.prebuilt_agents.generating_syllabus import generate_syllabus
 from django.http import JsonResponse
+from rest_framework.response import Response
+from rest_framework import status
 
 
 def start_learning(request, topic, api_key):
+    """
+    Starts the learning process by generating a syllabus and initializing session data.
+    """
     try:
         if not topic:
-            return JsonResponse({"error": "Topic is required."}, status=400)
+            return {"error": "Topic is required."}
 
-        # Initialize the OpenAI model
-        llm = ChatOpenAI(temperature=0.7, api_key=api_key)
+        # Generate the syllabus
+        syllabus = generate_syllabus(api_key, topic, "Focus on providing a clear learning path.")
 
-        # Generate the syllabus for the topic
-        syllabus = generate_syllabus(llm, topic, "Focus on providing a clear learning path.")
+        # Extract only the content if it's an AIMessage
+        if hasattr(syllabus, "content"):
+            syllabus = syllabus.content  # ✅ Extract text only
 
-        # Initialize the teaching agent
-        teaching_agent = teaching_agent_fun(llm)
-        teaching_agent["seed"](syllabus, topic)
-
-        # Store data in the session
-        request.session["teaching_agent"] = teaching_agent
+        # Store syllabus and topic in session (JSON serializable)
+        request.session["syllabus"] = syllabus
         request.session["current_topic"] = topic
-        request.session["messages"] = []  # Initialize an empty conversation history
-        request.session.modified = True  # Ensure the session is saved
+        request.session["messages"] = []  # Initialize conversation history
+        request.session.modified = True  # Ensure session update
 
         return {"topic": topic, "syllabus": syllabus}
+
     except Exception as e:
         return {"error": str(e)}
 
 
-def chat_with_agent(request, user_input):
+def chat_with_agent(request, user_input, api_key):
+    """
+    Handles user interaction with the teaching agent, ensuring JSON-safe session storage.
+    """
     try:
-        # Check if the teaching agent is initialized
-        if "teaching_agent" not in request.session:
-            return JsonResponse({"error": "Start a topic first."}, status=400)
+        if "syllabus" not in request.session or "current_topic" not in request.session:
+            return {"error": "No training data found. Please start learning first."}
 
-        # Validate user input
-        if not user_input:
-            return JsonResponse({"error": "Message cannot be empty."}, status=400)
+        # Recreate the teaching agent dynamically
+        teaching_agent = teaching_agent_fun(api_key)
 
-        # Retrieve the teaching agent from the session
-        teaching_agent = request.session["teaching_agent"]
+        # Retrieve messages from the session
+        conversation_history = request.session.get("messages", [])
 
-        # Add the user's message to the conversation
+        # Rebuild past conversation
+        for msg in conversation_history:
+            if msg["role"] == "user":
+                teaching_agent["add_user_message"](msg["content"])
+            elif msg["role"] == "assistant":
+                teaching_agent["add_ai_message"](msg["content"])
+
+        # Add new user message
         teaching_agent["add_user_message"](user_input)
 
-        # Generate a response from the teaching agent
+        # Generate AI response
         response = teaching_agent["generate_response"]()
-        print("Response from teaching agent:", response)  # Debug: Check the output of generate_response
 
-        # Ensure the response is a string
-        if hasattr(response, "content"):
-            response_content = response.content
-        else:
-            response_content = str(response)
+        # Extract AI response content
+        response_content = response.content if hasattr(response, "content") else str(response)
 
-        # Update the conversation history in the session
-        messages = teaching_agent["conversation_history"]()
-        request.session["messages"] = messages
-        request.session.modified = True  # Ensure the session is saved
+        # Update conversation history with JSON-safe data
+        conversation_history.append({"role": "user", "content": user_input})
+        conversation_history.append({"role": "assistant", "content": response_content})
+
+        # Store updated conversation in session
+        request.session["messages"] = conversation_history
+        request.session.modified = True  # Ensure session update
+
         return {"user_message": user_input, "assistant_response": response_content}
+
     except Exception as e:
         return {"error": str(e)}
 
