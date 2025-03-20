@@ -383,14 +383,23 @@ def extract_travel_details(prompt):
         return {"error": f"Error processing prompt: {str(e)}"}
 
 
-# Differentiation of the url:
+
 def differentiate_url(url):
+    # Define specific patterns for YouTube URLs
     youtube_patterns = [
-        r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/",  # matches youtube.com or youtu.be
+        r"^(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+(&\S*)?$",  # Matches YouTube video URLs
+        r"^(https?://)?(www\.)?youtu\.be/[\w-]+$",                     # Matches YouTube short URLs
+        r"^(https?://)?(www\.)?youtube\.com/playlist\?list=[\w-]+(&\S*)?$",  # Matches YouTube playlist URLs
+        r"^(https?://)?(www\.)?youtube\.com/channel/[\w-]+$",          # Matches YouTube channel URLs
+        r"^(https?://)?(www\.)?youtube\.com/c/[\w-]+$",               # Matches YouTube custom URLs
+        r"^(https?://)?(www\.)?youtube\.com/user/[\w-]+$",            # Matches YouTube user URLs
     ]
+    # Check if the URL matches any YouTube pattern
     for pattern in youtube_patterns:
-        if re.match(pattern, url):
+        if re.match(pattern, url, re.IGNORECASE):
             return "YouTube"
+
+    # If no YouTube pattern matches, assume it's a regular website
     return "Website"
 
 
