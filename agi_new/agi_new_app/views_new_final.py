@@ -541,8 +541,8 @@ def run_openai_environment(request):
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            if "diagnosis" in result:
-                return Response(markdown_to_html(result), status=status.HTTP_200_OK)
+            if "report" in result:
+                return Response({"answer":markdown_to_html(result["report"])}, status=status.HTTP_200_OK)
 
 
         # 7th Application:Education Agent
@@ -606,14 +606,15 @@ def run_openai_environment(request):
         elif file and 'image_processing' in agent[4]:
             print("image_processing_condition")
             result = medical_image_analysis(openai_api_key, file)
+
             if not result:
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             if "result" in result:
-                response_data["result"] = result["result"]
-                response_data["simplified_explanation"] = result["simplified_explanation"]
-                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+                # response_data["result"] = result["result"]
+                # response_data["simplified_explanation"] = result["simplified_explanation"]
+                return Response({"answer":markdown_to_html(result["result"])}, status=status.HTTP_200_OK)
 
         # 9th Application:
         elif file and user_prompt and 'image_answering' in agent[4]:
@@ -623,8 +624,7 @@ def run_openai_environment(request):
                 return Response({"error": "analyze_resume() returned None."},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             if "answer" in result:
-                response_data["answer"] = result["answer"]
-                return Response(markdown_to_html(response_data), status=status.HTTP_200_OK)
+                return Response({"answer": markdown_to_html(result["answer"])}, status=status.HTTP_200_OK)
 
 
         # 10th application-Blog agents:
@@ -1283,12 +1283,6 @@ from wyge.prebuilt_agents.medical_diagnosis import Cardiologist, Psychologist, P
 
 def run_medical_diagnosis(api_key, medical_report):
     try:
-        if not api_key:
-            return {"error": "API key is required."}
-
-        if not medical_report:
-            return {"error": "Medical report is required."}
-
         specialists = {
             "Cardiologist": Cardiologist(medical_report, api_key),
             "Psychologist": Psychologist(medical_report, api_key),
@@ -1452,6 +1446,7 @@ def visual_question_answering(api_key, uploaded_file, question):
     # Cleanup temporary file
     default_storage.delete(file_path)
 
+    print(response)
     return {"answer": response}
 
 
