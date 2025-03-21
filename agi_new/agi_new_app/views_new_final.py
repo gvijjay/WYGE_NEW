@@ -183,6 +183,7 @@ def create_agent(request):
         env_id = data.get('env_id')
         dynamic_agent_id = data.get('dynamic_agent_id')  # New field
         email = data.get('email')  # Added email field
+        image_id = data.get('image_id')  # Added image_id field
 
         if not env_id:
             return Response({"error": "Environment ID is required"}, status=400)
@@ -190,7 +191,7 @@ def create_agent(request):
         # Create the agent in the database
         agent_id = db.create_agent(
             name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id, dynamic_agent_id,
-            email
+            email, image_id
         )
 
         return Response({"agent_id": agent_id}, status=201)
@@ -209,45 +210,19 @@ def read_agent(request, agent_id):
                 "name": agent[1],
                 "system_prompt": agent[2],
                 "agent_description": agent[3],
-                "backend_id": agent[4],  # Updated for new field order
-                "tools": agent[5],  # Updated for new field order
+                "backend_id": agent[4],
+                "tools": agent[5],
                 "Additional_Features": {
                     "upload_attachment": agent[6],
                 },
                 "env_id": agent[7],
-                "dynamic_agent_id": agent[8],  # Include new field
-                "email": agent[9]  # Include email field
+                "dynamic_agent_id": agent[8],
+                "email": agent[9],
+                "image_id": agent[10]  # Include image_id field
             }, status=200)
         return Response({"error": "Agent not found"}, status=404)
     except Exception as e:
         return Response({"error": str(e)}, status=400)
-
-
-# Update Agent by ID
-@api_view(['POST'])
-def update_agent(request, agent_id):
-    try:
-        data = request.data
-        name = data.get('name')
-        system_prompt = data.get('system_prompt')
-        agent_description = data.get('agent_description')
-        backend_id = data.get('backend_id')  # Swapped field order: backend_id now comes before tools
-        tools = data.get('tools')  # Tools used by the agent
-        upload_attachment = data.get('upload_attachment')
-        env_id = data.get('env_id')
-        dynamic_agent_id = data.get('dynamic_agent_id')  # Handle new field
-        email = data.get('email')  # Added email field
-
-        # Update agent in the database
-        db.update_agent(
-            agent_id, name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id,
-            dynamic_agent_id, email
-        )
-
-        return Response({"message": f"Agent with ID {agent_id} updated successfully."}, status=200)
-    except Exception as e:
-        return Response({"error": str(e)}, status=400)
-
 
 # Delete Agent by ID
 @api_view(['GET'])
@@ -258,65 +233,78 @@ def delete_agent(request, agent_id):
     except Exception as e:
         return Response({"error": str(e)}, status=400)
 
+# Update Agent by ID
+@api_view(['POST'])
+def update_agent(request, agent_id):
+    try:
+        data = request.data
+        name = data.get('name')
+        system_prompt = data.get('system_prompt')
+        agent_description = data.get('agent_description')
+        backend_id = data.get('backend_id')
+        tools = data.get('tools')
+        upload_attachment = data.get('upload_attachment')
+        env_id = data.get('env_id')
+        dynamic_agent_id = data.get('dynamic_agent_id')
+        email = data.get('email')
+        image_id = data.get('image_id')  # Handle new field
+
+        # Update agent in the database
+        db.update_agent(
+            agent_id, name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id,
+            dynamic_agent_id, email, image_id
+        )
+
+        return Response({"message": f"Agent with ID {agent_id} updated successfully."}, status=200)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
+
 
 # Read All Agents
 @api_view(['GET'])
 def read_all_agents(request):
     try:
-        # Fetch all agents from the database
         agents = db.get_all_agents()
 
-        # Check if any agents are returned
         if not agents:
             return Response({"message": "No agents found"}, status=404)
 
-        # Structure the agents' data for JSON response
         agents_data = [
             {
                 "id": agent[0],
                 "name": agent[1],
                 "system_prompt": agent[2],
                 "agent_description": agent[3],
-                "backend_id": agent[4],  # Updated for new field order
-                "tools": agent[5],  # Updated for new field order
+                "backend_id": agent[4],
+                "tools": agent[5],
                 "Additional_Features": {
                     "upload_attachment": agent[6],
                 },
                 "env_id": agent[7],
-                "dynamic_agent_id": agent[8],  # Include new field
-                "email": agent[9]  # Include email field
+                "dynamic_agent_id": agent[8],
+                "email": agent[9],
+                "image_id": agent[10]  # Include image_id field
             }
             for agent in agents
         ]
 
         return Response({"agents": agents_data}, status=200)
-
     except Exception as e:
-        # Log the error for further investigation
         logger.error(f"Error fetching agents: {str(e)}")
-
-        # Return a user-friendly error message
         return Response({"error": "An error occurred while fetching agents"}, status=500)
 
 
 @api_view(['POST'])
 def get_all_agents_by_email(request):
-    """
-    Fetch all agents associated with the given email.
-    """
     try:
-        email = request.POST.get('email')  # Extract email from query parameters
+        email = request.POST.get('email')
         if not email:
             return Response({"error": "Email is required."}, status=400)
 
-        # Fetch agents from the database
         agents = db.get_agents_by_email(email)
-
-        # Check if agents are found
         if not agents:
             return Response({"message": "No agents found."}, status=404)
 
-        # Structure the agents' data for JSON response
         agents_data = [
             {
                 "id": agent[0],
@@ -328,15 +316,14 @@ def get_all_agents_by_email(request):
                 "upload_attachment": agent[6],
                 "env_id": agent[7],
                 "dynamic_agent_id": agent[8],
-                "email": agent[9]  # Include email in the response
+                "email": agent[9],
+                "image_id": agent[10]  # Include image_id field
             }
             for agent in agents
         ]
 
         return Response({"agents": agents_data}, status=200)
-
     except Exception as e:
-        # Log the error for further investigation
         logger.error(f"Error fetching agents: {str(e)}")
         return Response({"error": "An error occurred while fetching agents."}, status=500)
 
@@ -383,16 +370,15 @@ def extract_travel_details(prompt):
         return {"error": f"Error processing prompt: {str(e)}"}
 
 
-
 def differentiate_url(url):
     # Define specific patterns for YouTube URLs
     youtube_patterns = [
         r"^(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+(&\S*)?$",  # Matches YouTube video URLs
-        r"^(https?://)?(www\.)?youtu\.be/[\w-]+$",                     # Matches YouTube short URLs
+        r"^(https?://)?(www\.)?youtu\.be/[\w-]+$",  # Matches YouTube short URLs
         r"^(https?://)?(www\.)?youtube\.com/playlist\?list=[\w-]+(&\S*)?$",  # Matches YouTube playlist URLs
-        r"^(https?://)?(www\.)?youtube\.com/channel/[\w-]+$",          # Matches YouTube channel URLs
-        r"^(https?://)?(www\.)?youtube\.com/c/[\w-]+$",               # Matches YouTube custom URLs
-        r"^(https?://)?(www\.)?youtube\.com/user/[\w-]+$",            # Matches YouTube user URLs
+        r"^(https?://)?(www\.)?youtube\.com/channel/[\w-]+$",  # Matches YouTube channel URLs
+        r"^(https?://)?(www\.)?youtube\.com/c/[\w-]+$",  # Matches YouTube custom URLs
+        r"^(https?://)?(www\.)?youtube\.com/user/[\w-]+$",  # Matches YouTube user URLs
     ]
     # Check if the URL matches any YouTube pattern
     for pattern in youtube_patterns:
@@ -427,7 +413,7 @@ def run_openai_environment(request):
         user_prompt = request.data.get('prompt', '')
         file = request.FILES.get('file')
         url = request.data.get('url', '')
-        file1=request.FILES.getlist("file")
+        file1 = request.FILES.getlist("file")
 
         # Retrieve agent details
         agent = db.read_agent(agent_id)
@@ -551,48 +537,105 @@ def run_openai_environment(request):
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             if "report" in result:
-                return Response({"answer":markdown_to_html(result["report"])}, status=status.HTTP_200_OK)
+                return Response({"answer": markdown_to_html(result["report"])}, status=status.HTTP_200_OK)
 
 
         # 7th Application:Education Agent
+        # elif user_prompt and "edu_gpt" in agent[4]:
+        #     prompt_type = extract_topic_or_query(user_prompt)  # Determine if input is a topic or a query
+        #
+        #     # If training is in progress, block further queries
+        #     if request.session.get("training", False):
+        #         return Response({"message": "Training in progress. Please wait for completion."},
+        #                         status=status.HTTP_200_OK)
+        #
+        #     # If it's a topic name, start learning
+        #     if prompt_type == "topic":
+        #         print("EduGPT: Learning about the topic...")
+        #
+        #         try:
+        #             # Set training flag
+        #             request.session["training"] = True
+        #             request.session.modified = True
+        #
+        #             # Start learning
+        #             result = start_learning(request, user_prompt, openai_api_key)
+        #             print("Result is...................")
+        #
+        #             # Training completed
+        #             request.session["training"] = False
+        #             request.session.modified = True
+        #             print(result)
+        #             return Response({"answer": result["syllabus"]}, status=status.HTTP_200_OK)
+        #
+        #         except Exception as e:
+        #             request.session["training"] = False  # Reset training flag on failure
+        #             request.session.modified = True
+        #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        #
+        #     # If it's a query, proceed with chat agent
+        #
+        #     elif prompt_type == "query":
+        #         print("EduGPT: Handling query using existing session data...")
+        #         try:
+        #             if "syllabus" not in request.session or "current_topic" not in request.session:
+        #                 return Response({"error": "No training data found. Please start learning first."},
+        #                                 status=status.HTTP_400_BAD_REQUEST)
+        #
+        #             # Pass API key explicitly to chat_with_agent
+        #             result = chat_with_agent(request, user_prompt, openai_api_key)
+        #
+        #             if "error" in result:
+        #                 return Response({"error": result["error"]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        #
+        #             return Response({"answer": markdown_to_html(result["assistant_response"])},
+        #                             status=status.HTTP_200_OK)
+        #
+        #         except Exception as e:
+        #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        #
+        #     else:
+        #         return Response({"error": "Invalid prompt type. Please provide a valid topic or query."},
+        #                         status=status.HTTP_400_BAD_REQUEST)
+        #7th application - Edugpt
         elif user_prompt and "edu_gpt" in agent[4]:
             prompt_type = extract_topic_or_query(user_prompt)  # Determine if input is a topic or a query
 
             # If training is in progress, block further queries
-            if request.session.get("training", False):
-                return Response({"message": "Training in progress. Please wait for completion."}, status=status.HTTP_200_OK)
+            cache_key = f"user_{request.user.id}_training" if request.user.is_authenticated else f"session_{request.session.session_key}_training"
+            if cache.get(cache_key, False):
+                return Response({"message": "Training in progress. Please wait for completion."},
+                                status=status.HTTP_200_OK)
 
             # If it's a topic name, start learning
             if prompt_type == "topic":
                 print("EduGPT: Learning about the topic...")
 
                 try:
-                    # Set training flag
-                    request.session["training"] = True
-                    request.session.modified = True
+                    # Set training flag in cache
+                    cache.set(cache_key, True, timeout=3600)
 
                     # Start learning
                     result = start_learning(request, user_prompt, openai_api_key)
                     print("Result is...................")
 
                     # Training completed
-                    request.session["training"] = False
-                    request.session.modified = True
+                    cache.set(cache_key, False, timeout=3600)
                     print(result)
                     return Response({"answer": result["syllabus"]}, status=status.HTTP_200_OK)
 
                 except Exception as e:
-                    request.session["training"] = False  # Reset training flag on failure
-                    request.session.modified = True
+                    cache.set(cache_key, False, timeout=3600)  # Reset training flag on failure
                     return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # If it's a query, proceed with chat agent
-
             elif prompt_type == "query":
-                print("EduGPT: Handling query using existing session data...")
-
+                print("EduGPT: Handling query using existing cache data...")
                 try:
-                    if "syllabus" not in request.session or "current_topic" not in request.session:
+                    cache_key = f"user_{request.user.id}_edu_data" if request.user.is_authenticated else f"session_{request.session.session_key}_edu_data"
+                    edu_data = cache.get(cache_key)
+
+                    if not edu_data or "syllabus" not in edu_data or "current_topic" not in edu_data:
                         return Response({"error": "No training data found. Please start learning first."},
                                         status=status.HTTP_400_BAD_REQUEST)
 
@@ -602,7 +645,8 @@ def run_openai_environment(request):
                     if "error" in result:
                         return Response({"error": result["error"]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-                    return Response({"answer": markdown_to_html(result["assistant_response"])}, status=status.HTTP_200_OK)
+                    return Response({"answer": markdown_to_html(result["assistant_response"])},
+                                    status=status.HTTP_200_OK)
 
                 except Exception as e:
                     return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -610,6 +654,7 @@ def run_openai_environment(request):
             else:
                 return Response({"error": "Invalid prompt type. Please provide a valid topic or query."},
                                 status=status.HTTP_400_BAD_REQUEST)
+
 
         # 8th Application:medical Image processing
         elif file and 'image_processing' in agent[4]:
@@ -623,7 +668,7 @@ def run_openai_environment(request):
             if "result" in result:
                 # response_data["result"] = result["result"]
                 # response_data["simplified_explanation"] = result["simplified_explanation"]
-                return Response({"answer":markdown_to_html(result["result"])}, status=status.HTTP_200_OK)
+                return Response({"answer": markdown_to_html(result["result"])}, status=status.HTTP_200_OK)
 
         # 9th Application:
         elif file and user_prompt and 'image_answering' in agent[4]:
@@ -1146,7 +1191,7 @@ def handle_fill_missing_data(file, openai_api_key):
 #     except Exception as e:
 #         return {"error": str(e)}
 
-#Multiple Resume Tracking
+# Multiple Resume Tracking
 from wyge.prebuilt_agents.resume_analyser import ResumeAnalyzer
 
 
@@ -1202,6 +1247,7 @@ def analyze_resume(job_description, resume_files, api_key):
 
     except Exception as e:
         return {"error": str(e)}
+
 
 # Application 4: Chat to doc (rag) with page extraction from start to end
 from wyge.prebuilt_agents.rag import RAGApplication
@@ -1322,10 +1368,12 @@ from django.http import JsonResponse
 from rest_framework.response import Response
 from rest_framework import status
 
+from django.core.cache import cache
+
 
 def start_learning(request, topic, api_key):
     """
-    Starts the learning process by generating a syllabus and initializing session data.
+    Starts the learning process by generating a syllabus and initializing cache data.
     """
     try:
         if not topic:
@@ -1338,11 +1386,13 @@ def start_learning(request, topic, api_key):
         if hasattr(syllabus, "content"):
             syllabus = syllabus.content  # ✅ Extract text only
 
-        # Store syllabus and topic in session (JSON serializable)
-        request.session["syllabus"] = syllabus
-        request.session["current_topic"] = topic
-        request.session["messages"] = []  # Initialize conversation history
-        request.session.modified = True  # Ensure session update
+        # Store syllabus and topic in cache
+        cache_key = f"user_{request.user.id}_edu_data" if request.user.is_authenticated else f"session_{request.session.session_key}_edu_data"
+        cache.set(cache_key, {
+            "syllabus": syllabus,
+            "current_topic": topic,
+            "messages": []  # Initialize conversation history
+        }, timeout=3600)  # Set a timeout for the cache (e.g., 1 hour)
 
         return {"topic": topic, "syllabus": syllabus}
 
@@ -1350,19 +1400,92 @@ def start_learning(request, topic, api_key):
         return {"error": str(e)}
 
 
+# def start_learning(request, topic, api_key):
+#     """
+#     Starts the learning process by generating a syllabus and initializing session data.
+#     """
+#     try:
+#         if not topic:
+#             return {"error": "Topic is required."}
+#
+#         # Generate the syllabus
+#         syllabus = generate_syllabus(api_key, topic, "Focus on providing a clear learning path.")
+#
+#         # Extract only the content if it's an AIMessage
+#         if hasattr(syllabus, "content"):
+#             syllabus = syllabus.content  # ✅ Extract text only
+#
+#         # Store syllabus and topic in session (JSON serializable)
+#         request.session["syllabus"] = syllabus
+#         request.session["current_topic"] = topic
+#         request.session["messages"] = []  # Initialize conversation history
+#         request.session.modified = True  # Ensure session update
+#
+#         return {"topic": topic, "syllabus": syllabus}
+#
+#     except Exception as e:
+#         return {"error": str(e)}
+
+
+# def chat_with_agent(request, user_input, api_key):
+#     """
+#     Handles user interaction with the teaching agent, ensuring JSON-safe session storage.
+#     """
+#     try:
+#         if "syllabus" not in request.session or "current_topic" not in request.session:
+#             return {"error": "No training data found. Please start learning first."}
+#
+#         # Recreate the teaching agent dynamically
+#         teaching_agent = teaching_agent_fun(api_key)
+#
+#         # Retrieve messages from the session
+#         conversation_history = request.session.get("messages", [])
+#
+#         # Rebuild past conversation
+#         for msg in conversation_history:
+#             if msg["role"] == "user":
+#                 teaching_agent["add_user_message"](msg["content"])
+#             elif msg["role"] == "assistant":
+#                 teaching_agent["add_ai_message"](msg["content"])
+#
+#         # Add new user message
+#         teaching_agent["add_user_message"](user_input)
+#
+#         # Generate AI response
+#         response = teaching_agent["generate_response"]()
+#
+#         # Extract AI response content
+#         response_content = response.content if hasattr(response, "content") else str(response)
+#
+#         # Update conversation history with JSON-safe data
+#         conversation_history.append({"role": "user", "content": user_input})
+#         conversation_history.append({"role": "assistant", "content": response_content})
+#
+#         # Store updated conversation in session
+#         request.session["messages"] = conversation_history
+#         request.session.modified = True  # Ensure session update
+#
+#         return {"user_message": user_input, "assistant_response": response_content}
+#
+#     except Exception as e:
+#         return {"error": str(e)}
+
 def chat_with_agent(request, user_input, api_key):
     """
-    Handles user interaction with the teaching agent, ensuring JSON-safe session storage.
+    Handles user interaction with the teaching agent, ensuring cache-based session storage.
     """
     try:
-        if "syllabus" not in request.session or "current_topic" not in request.session:
+        cache_key = f"user_{request.user.id}_edu_data" if request.user.is_authenticated else f"session_{request.session.session_key}_edu_data"
+        edu_data = cache.get(cache_key)
+
+        if not edu_data or "syllabus" not in edu_data or "current_topic" not in edu_data:
             return {"error": "No training data found. Please start learning first."}
 
         # Recreate the teaching agent dynamically
         teaching_agent = teaching_agent_fun(api_key)
 
-        # Retrieve messages from the session
-        conversation_history = request.session.get("messages", [])
+        # Retrieve messages from the cache
+        conversation_history = edu_data.get("messages", [])
 
         # Rebuild past conversation
         for msg in conversation_history:
@@ -1384,9 +1507,9 @@ def chat_with_agent(request, user_input, api_key):
         conversation_history.append({"role": "user", "content": user_input})
         conversation_history.append({"role": "assistant", "content": response_content})
 
-        # Store updated conversation in session
-        request.session["messages"] = conversation_history
-        request.session.modified = True  # Ensure session update
+        # Store updated conversation in cache
+        edu_data["messages"] = conversation_history
+        cache.set(cache_key, edu_data, timeout=3600)  # Update cache with new data
 
         return {"user_message": user_input, "assistant_response": response_content}
 
