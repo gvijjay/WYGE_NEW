@@ -539,64 +539,6 @@ def run_openai_environment(request):
             if "report" in result:
                 return Response({"answer": markdown_to_html(result["report"])}, status=status.HTTP_200_OK)
 
-
-        # 7th Application:Education Agent
-        # elif user_prompt and "edu_gpt" in agent[4]:
-        #     prompt_type = extract_topic_or_query(user_prompt)  # Determine if input is a topic or a query
-        #
-        #     # If training is in progress, block further queries
-        #     if request.session.get("training", False):
-        #         return Response({"message": "Training in progress. Please wait for completion."},
-        #                         status=status.HTTP_200_OK)
-        #
-        #     # If it's a topic name, start learning
-        #     if prompt_type == "topic":
-        #         print("EduGPT: Learning about the topic...")
-        #
-        #         try:
-        #             # Set training flag
-        #             request.session["training"] = True
-        #             request.session.modified = True
-        #
-        #             # Start learning
-        #             result = start_learning(request, user_prompt, openai_api_key)
-        #             print("Result is...................")
-        #
-        #             # Training completed
-        #             request.session["training"] = False
-        #             request.session.modified = True
-        #             print(result)
-        #             return Response({"answer": result["syllabus"]}, status=status.HTTP_200_OK)
-        #
-        #         except Exception as e:
-        #             request.session["training"] = False  # Reset training flag on failure
-        #             request.session.modified = True
-        #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        #
-        #     # If it's a query, proceed with chat agent
-        #
-        #     elif prompt_type == "query":
-        #         print("EduGPT: Handling query using existing session data...")
-        #         try:
-        #             if "syllabus" not in request.session or "current_topic" not in request.session:
-        #                 return Response({"error": "No training data found. Please start learning first."},
-        #                                 status=status.HTTP_400_BAD_REQUEST)
-        #
-        #             # Pass API key explicitly to chat_with_agent
-        #             result = chat_with_agent(request, user_prompt, openai_api_key)
-        #
-        #             if "error" in result:
-        #                 return Response({"error": result["error"]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        #
-        #             return Response({"answer": markdown_to_html(result["assistant_response"])},
-        #                             status=status.HTTP_200_OK)
-        #
-        #         except Exception as e:
-        #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        #
-        #     else:
-        #         return Response({"error": "Invalid prompt type. Please provide a valid topic or query."},
-        #                         status=status.HTTP_400_BAD_REQUEST)
         #7th application - Edugpt
         elif user_prompt and "edu_gpt" in agent[4]:
             prompt_type = extract_topic_or_query(user_prompt)  # Determine if input is a topic or a query
@@ -622,7 +564,7 @@ def run_openai_environment(request):
                     # Training completed
                     cache.set(cache_key, False, timeout=3600)
                     print(result)
-                    return Response({"answer": result["syllabus"]}, status=status.HTTP_200_OK)
+                    return Response({"answer": markdown_to_html(result["syllabus"])}, status=status.HTTP_200_OK)
 
                 except Exception as e:
                     cache.set(cache_key, False, timeout=3600)  # Reset training flag on failure
