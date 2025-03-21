@@ -195,19 +195,20 @@ class PostgreSQLDB:
                     name VARCHAR(100) NOT NULL,
                     system_prompt TEXT,
                     agent_description TEXT,
-                    backend_id TEXT,  -- Swapped: backend_id now comes before tools
-                    tools TEXT,  -- Tools used by the agent
+                    backend_id TEXT,  
+                    tools TEXT,  
                     upload_attachment BOOLEAN DEFAULT FALSE,  
                     env_id INT REFERENCES environment(id) ON DELETE CASCADE,
                     dynamic_agent_id INT REFERENCES dynamic_ai_agents(id) ON DELETE CASCADE,
-                    email VARCHAR(255)  -- Added email as the last column
+                    email VARCHAR(255),
+                    image_id INT  -- New column added
                 );
                 """
                 cursor.execute(query)
                 conn.commit()
                 cursor.close()
                 conn.close()
-                print("Agents table created successfully.")
+                print("Agents table created successfully with image_id column.")
         except Exception as e:
             print(f"Error creating agents table: {e}")
 
@@ -226,22 +227,22 @@ class PostgreSQLDB:
             print(f"Error deleting agents table: {e}")
 
     def create_agent(self, name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id,
-                     dynamic_agent_id, email):
+                     dynamic_agent_id, email, image_id):
         try:
             conn = self.connect()
             if conn is not None:
                 cursor = conn.cursor()
                 query = """
                 INSERT INTO ai_all_agents 
-                (name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id, dynamic_agent_id, email)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id, dynamic_agent_id, email, image_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id;
                 """
                 cursor.execute(query, (
                     name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id,
-                    dynamic_agent_id, email
+                    dynamic_agent_id, email, image_id
                 ))
-                agent_id = cursor.fetchone()[0]  # Expecting a single row with the new agent ID
+                agent_id = cursor.fetchone()[0]
                 conn.commit()
                 cursor.close()
                 conn.close()
@@ -266,7 +267,7 @@ class PostgreSQLDB:
             return None
 
     def update_agent(self, agent_id, name=None, system_prompt=None, agent_description=None, backend_id=None,
-                     tools=None, upload_attachment=None, env_id=None, dynamic_agent_id=None, email=None):
+                     tools=None, upload_attachment=None, env_id=None, dynamic_agent_id=None, email=None, image_id=None):
         try:
             conn = self.connect()
             if conn is not None:
@@ -281,12 +282,13 @@ class PostgreSQLDB:
                     upload_attachment = COALESCE(%s, upload_attachment),
                     env_id = COALESCE(%s, env_id),
                     dynamic_agent_id = COALESCE(%s, dynamic_agent_id),
-                    email = COALESCE(%s, email)
+                    email = COALESCE(%s, email),
+                    image_id = COALESCE(%s, image_id)  -- New column update
                 WHERE id = %s;
                 """
                 cursor.execute(query, (
                     name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id,
-                    dynamic_agent_id, email, agent_id
+                    dynamic_agent_id, email, image_id, agent_id
                 ))
                 conn.commit()
                 cursor.close()
@@ -315,7 +317,7 @@ class PostgreSQLDB:
             if conn is not None:
                 cursor = conn.cursor()
                 query = """
-                SELECT id, name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id, dynamic_agent_id, email
+                SELECT id, name, system_prompt, agent_description, backend_id, tools, upload_attachment, env_id, dynamic_agent_id, email, image_id
                 FROM ai_all_agents;
                 """
                 cursor.execute(query)
