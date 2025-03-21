@@ -659,6 +659,11 @@ def run_openai_environment(request):
                 response_data = markdown_to_html(result["content"])
                 return Response({"answer": response_data}, status=status.HTTP_200_OK)
 
+        #12th Application: MCQ Generator
+        elif user_prompt and 'mcq_generator' in agent[4]:
+            result=mcq_generation(openai_api_key,user_prompt)
+            if "answer" in result:
+                return Response({"answer":markdown_to_html(result["answer"])},status=status.HTTP_200_OK)
 
         # Second Application: Synthetic_data_generator
         elif 'synthetic_data_generation' in agent[4]:
@@ -1616,6 +1621,15 @@ def generate_blog_from_file(prompt, file, option, api_key):
         linkedin_post = linkedin_agent.generate_linkedin_post(prompt, str(content))
 
         return {'content': linkedin_post}
+
+#Application 12-MCQ Generator
+from wyge.prebuilt_agents.mcq_generator import MCQGeneratorAgent
+def mcq_generation(api_key,user_prompt):
+    # Initialize the MCQ generator agent
+    agent = MCQGeneratorAgent(api_key)
+    mcq_set = agent.generate_mcq_set(user_prompt)
+
+    return {"answer":mcq_set}
 
 
 # ______________________________________________________Ends Here and next api starts_________________________________
