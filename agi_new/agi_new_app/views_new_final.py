@@ -405,6 +405,7 @@ def extract_topic_or_query(user_prompt):
         return "query"  # It's a question/query
     return "topic"  # It's a valid topic name
 
+import textwrap
 
 @api_view(['POST'])
 def run_openai_environment(request):
@@ -445,6 +446,7 @@ def run_openai_environment(request):
                 return Response({"error": "No valid output from gen_response."}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3rd application:ATS Tracker
+
         elif file1 and user_prompt and 'ats_tracker' in agent[4]:
             print("Ats_tracker_condition")
             result = analyze_resume(user_prompt, file1, openai_api_key)
@@ -452,51 +454,39 @@ def run_openai_environment(request):
 
             # Validate response format
             if "error" in result:
-                # Handle error case
                 return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
 
             # Handle single resume analysis
             if "JD Match" in result:
-                # Convert the relevant parts of the result to markdown (if needed) and return
-                markdown_content = f"""
-                **Job Description Match:** {result.get("JD Match", "N/A")}
+                markdown_content = f"""\
+            **Job Description Match:** {result.get("JD Match", "N/A")}
+            **Missing Keywords:**{", ".join(result.get("MissingKeywords", [])) if result.get("MissingKeywords") else "None"}
+            **Profile Summary:** {result.get("Profile Summary", "No summary available")}
+            **Suggestions:**{chr(10).join([f"- {suggestion}" for suggestion in result.get("Suggestions", [])])}
+                    """.strip()  # Strip any extra leading/trailing spaces
 
-                **Missing Keywords:**
-                {", ".join(result.get("MissingKeywords", [])) if result.get("MissingKeywords") else "None"}
-
-                **Profile Summary:**
-                {result.get("Profile Summary", "No summary available")}
-
-                **Suggestions:**
-                {"/n".join([f"- {suggestion}" for suggestion in result.get("Suggestions", [])])}
-                """
-                return Response({"answers": markdown_to_html(markdown_content)}, status=status.HTTP_200_OK)
+                html_content = markdown.markdown(markdown_content, extensions=["extra"])
+                return Response({"answers": html_content}, status=status.HTTP_200_OK)
 
             # Handle multiple resume analysis
             elif "summary" in result and "detailed_results" in result:
-                # Convert detailed results to markdown (if needed) and return
                 detailed_results_html = []
                 for res in result["detailed_results"]:
-                    markdown_content = f"""
-                    **Job Description Match:** {res.get("JD Match", "N/A")}
+                    markdown_content = f"""\
+            **Job Description Match:** {res.get("JD Match", "N/A")}
+            **Missing Keywords:**{", ".join(res.get("MissingKeywords", [])) if res.get("MissingKeywords") else "None"}
+            **Profile Summary:**{res.get("Profile Summary", "No summary available")}
+            **Suggestions:**  {chr(10).join([f"- {suggestion}" for suggestion in res.get("Suggestions", [])])}
+                        """.strip()
 
-                    **Missing Keywords:**
-                    {", ".join(res.get("MissingKeywords", [])) if res.get("MissingKeywords") else "None"}
-
-                    **Profile Summary:**
-                    {res.get("Profile Summary", "No summary available")}
-
-                    **Suggestions:**
-                    {"/n".join([f"- {suggestion}" for suggestion in res.get("Suggestions", [])])}
-                    """
-                    detailed_results_html.append(markdown_to_html(markdown_content))
+                    html_content = markdown.markdown(markdown_content, extensions=["extra"])
+                    detailed_results_html.append(html_content)
 
                 return Response({
                     "summary": result["summary"],
                     "detailed_results": detailed_results_html
                 }, status=status.HTTP_200_OK)
 
-            # Handle unexpected response format
             else:
                 return Response({"error": "Unexpected response format from the analyzer"},
                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1635,7 +1625,7 @@ def mcq_generation(api_key,user_prompt):
 # ______________________________________________________Ends Here and next api starts_________________________________
 # -----------------------------------------------------------------------------------------------------------
 
-# Dynamic agen creation code
+# Dynamic agent creation code
 
 # Create Dynamic Agent
 @api_view(['POST'])
@@ -1907,8 +1897,6 @@ def create_openai_environment(agent_details, openai_api_key):
 
 # from wyge.agents.prebuilt_agents import GoogleDriveAgent, EmailAgent
 # from wyge.agents.prebuilt_agents import ResearchAgent, BlogAgent, LinkedInAgent, ImageGenerationAgent, EmailAgent
-
-
 @api_view(['POST'])
 def run_agent_environment(request):
     """
@@ -1922,7 +1910,7 @@ def run_agent_environment(request):
         print("Request data:", data)
 
         agent_id = data.get('agent_id')
-        user_query = data.get('query')
+        user_query = data.get('prompt')
         recipient_email = data.get('email')  # Email comes from the frontend
         authorisation_code = data.get('auth_code')
         linkedin_token = data.get('token')
@@ -2027,32 +2015,32 @@ def run_agent_environment(request):
             #     )
             #     print("Email sent acknowledgment:", email_ack)
             #
-            # elif "send_to_drive" in agent[5]:
-            #     print("Handling Google Drive upload using user's authorization code...")
-            #     drive_file_id = upload_to_drive(file_path, authorisation_code)
-            #     if not drive_file_id:
-            #         return Response({"error": "Failed to upload file to Google Drive"}, status=500)
-            #
+            if "send_to_drive" in agent[5]:
+                print("Handling Google Drive upload using user's authorization code...")
+                drive_file_id = upload_to_drive(file_path, authorisation_code)
+                if not drive_file_id:
+                    return Response({"error": "Failed to upload file to Google Drive"}, status=500)
+
             # elif "linkedin_post" in agent[5]:
             #     print("Handling LinkedIn post...")
             #     linkedin_agent = LinkedInAgent(api_key=openai_api_key)
             #     linkedin_ack = linkedin_agent.post_content_on_linkedin(linkedin_token, markdown_content)
             #     print("LinkedIn post acknowledgment:", linkedin_ack)
             #
-            # elif "google_calendar" in agent[5]:
-            #     print("Handling Google Calendar scheduling...")
-            #     event_details = {
-            #         'summary': f"Event from {agent_details['name']}",
-            #         'location': "Online",
-            #         'description': chat_content,
-            #         'time_zone': 'Asia/Kolkata',
-            #         'start_time': datetime.utcnow() + timedelta(hours=1),
-            #         'end_time': datetime.utcnow() + timedelta(hours=3)
-            #     }
-            #     calendar_event_link = create_google_calendar_event(event_details, authorisation_code)
-            #     if not calendar_event_link:
-            #         return Response({"error": "Failed to create Google Calendar event"}, status=500)
-            #     print(f"Google Calendar event created: {calendar_event_link}")
+            elif "google_calendar" in agent[5]:
+                print("Handling Google Calendar scheduling...")
+                event_details = {
+                    'summary': f"Event from {agent_details['name']}",
+                    'location': "Online",
+                    'description': chat_content,
+                    'time_zone': 'Asia/Kolkata',
+                    'start_time': datetime.utcnow() + timedelta(hours=1),
+                    'end_time': datetime.utcnow() + timedelta(hours=3)
+                }
+                calendar_event_link = create_google_calendar_event(event_details, authorisation_code)
+                if not calendar_event_link:
+                    return Response({"error": "Failed to create Google Calendar event"}, status=500)
+                print(f"Google Calendar event created: {calendar_event_link}")
 
             if "github" in agent[5]:
                 print("Handling GitHub repository access...")
