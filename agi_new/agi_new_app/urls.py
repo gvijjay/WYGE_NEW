@@ -1,6 +1,6 @@
 
 from django.urls import path
-from . import views_new_final,views_for_hana_rag
+from . import views_new_final,views_for_hana_rag,report_generation
 
 urlpatterns = [
     path('environment/create', views_new_final.create_environment, name='create_environment'),
@@ -35,5 +35,7 @@ urlpatterns = [
     path('run-agent-environment', views_new_final.run_agent_environment, name='run_agent_environment'),
 
 
+   #Report Generation Url
+    path('report_gen', report_generation.run_openai_environment_report, name='report_generation_api'),
 
 ]
