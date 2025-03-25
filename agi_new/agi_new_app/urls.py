@@ -37,5 +37,7 @@ urlpatterns = [
 
    #Report Generation Url
     path('report_gen', report_generation.run_openai_environment_report, name='report_generation_api'),
+    
+    
 
 ]
