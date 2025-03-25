@@ -683,8 +683,13 @@ def generate_matplotlib_code(df, prompt, client):
         ]
     )
 
+
     code = response.choices[0].message.content
 
     if "```python" in code:
         code = code.split("```python")[1].split("```")[0]
     return code
+
+
+
+
